@@ -1,4 +1,4 @@
-use crate::{models::AdbStatResponse, ADBDeviceExt, ADBMessageTransport, RebootType, Result};
+use crate::{models::{AdbStatResponse, PackageListType}, ADBDeviceExt, ADBMessageTransport, RebootType, Result};
 use std::{
     io::{Read, Write},
     path::Path,
@@ -41,5 +41,9 @@ impl<T: ADBMessageTransport> ADBDeviceExt for ADBMessageDevice<T> {
 
     fn framebuffer_inner(&mut self) -> Result<image::ImageBuffer<image::Rgba<u8>, Vec<u8>>> {
         self.framebuffer_inner()
+    }
+
+    fn list_packages(&mut self, package_filter: &PackageListType) -> Result<()> {
+        self.list_packages(&package_filter)
     }
 }

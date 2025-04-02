@@ -3,7 +3,7 @@ use std::path::Path;
 
 use image::{ImageBuffer, ImageFormat, Rgba};
 
-use crate::models::AdbStatResponse;
+use crate::models::{AdbStatResponse, PackageListType};
 use crate::{RebootType, Result};
 
 /// Trait representing all features available on both [`crate::ADBServerDevice`] and [`crate::ADBUSBDevice`]
@@ -43,6 +43,9 @@ pub trait ADBDeviceExt {
 
     /// Uninstall the package `package` from device.
     fn uninstall(&mut self, package: &str) -> Result<()>;
+
+    /// List Packages
+    fn list_packages(&mut self, package_filter: &PackageListType) -> Result<()>;
 
     /// Inner method requesting framebuffer from an Android device
     fn framebuffer_inner(&mut self) -> Result<ImageBuffer<Rgba<u8>, Vec<u8>>>;

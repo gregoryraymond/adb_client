@@ -6,3 +6,4 @@ mod reboot;
 mod shell;
 mod stat;
 mod uninstall;
+mod list_packages;

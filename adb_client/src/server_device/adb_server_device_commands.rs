@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     constants::BUFFER_SIZE,
-    models::{AdbServerCommand, AdbStatResponse, HostFeatures},
+    models::{AdbServerCommand, AdbStatResponse, HostFeatures, PackageListType},
     ADBDeviceExt, Result, RustADBError,
 };
 
@@ -114,6 +114,10 @@ impl ADBDeviceExt for ADBServerDevice {
 
     fn uninstall(&mut self, package: &str) -> Result<()> {
         self.uninstall(package)
+    }
+
+    fn list_packages(&mut self, package_filter: &PackageListType) -> Result<()> {
+        self.list_packages(&package_filter)        
     }
 
     fn framebuffer_inner(&mut self) -> Result<image::ImageBuffer<image::Rgba<u8>, Vec<u8>>> {

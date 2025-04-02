@@ -13,6 +13,7 @@ use super::adb_message_device::ADBMessageDevice;
 use super::models::MessageCommand;
 use super::{ADBRsaKey, ADBTransportMessage};
 use crate::device::adb_transport_message::{AUTH_RSAPUBLICKEY, AUTH_SIGNATURE, AUTH_TOKEN};
+use crate::models::PackageListType;
 use crate::ADBDeviceExt;
 use crate::ADBMessageTransport;
 use crate::ADBTransport;
@@ -281,6 +282,11 @@ impl ADBDeviceExt for ADBUSBDevice {
     #[inline]
     fn framebuffer_inner(&mut self) -> Result<image::ImageBuffer<image::Rgba<u8>, Vec<u8>>> {
         self.inner.framebuffer_inner()
+    }
+
+    #[inline]
+    fn list_packages(&mut self, package_filter: &PackageListType) -> Result<()> {
+        self.inner.list_packages(package_filter)   
     }
 }
 

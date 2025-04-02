@@ -14,3 +14,4 @@ mod tcpip;
 mod transport;
 mod uninstall;
 mod usb;
+mod list_packages;

@@ -5,6 +5,7 @@ use std::{io::Read, net::SocketAddr};
 use super::adb_message_device::ADBMessageDevice;
 use super::models::MessageCommand;
 use super::ADBTransportMessage;
+use crate::models::PackageListType;
 use crate::{ADBDeviceExt, ADBMessageTransport, ADBTransport, Result, TcpTransport};
 
 /// Represent a device reached and available over USB.
@@ -112,6 +113,11 @@ impl ADBDeviceExt for ADBTcpDevice {
     #[inline]
     fn framebuffer_inner(&mut self) -> Result<image::ImageBuffer<image::Rgba<u8>, Vec<u8>>> {
         self.inner.framebuffer_inner()
+    }
+
+    #[inline]
+    fn list_packages(&mut self, package_filter: &PackageListType) -> Result<()> {
+        self.inner.list_packages(&package_filter)
     }
 }
 

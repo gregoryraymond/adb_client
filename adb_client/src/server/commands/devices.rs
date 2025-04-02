@@ -78,6 +78,11 @@ impl ADBServer {
         }
     }
 
+    /// Given a DeviceShort from list devices conver this into an ADBServerDevice
+    pub fn get_device_from_device_short(&mut self, device: &DeviceShort) -> Result<ADBServerDevice> {
+        Ok(ADBServerDevice::new(device.identifier.clone(), self.socket_addr))
+    }
+
     /// Tracks new devices showing up.
     pub fn track_devices(&mut self, callback: impl Fn(DeviceShort) -> Result<()>) -> Result<()> {
         self.connect()?
