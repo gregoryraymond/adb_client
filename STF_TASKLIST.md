@@ -29,9 +29,12 @@ Implemented as a stack of chained PRs (each builds on the previous):
 - [x] **§3 Screen capture** — `screencap`
 - [x] **§4 Port forwarding** — `forward_tcp`, `list_forward`, `list_reverse`, `ForwardRule`
 - [x] **§5 Generic local socket** — `open_local`
-- [~] **§6 Screen streaming** — minicap/minitouch protocol codecs done (`MinicapStream`,
-      `Minitouch`, banner parsers), behind the `screen-stream` feature. Binary provisioning
-      (6a) and process lifecycle/reconnect (6d) remain as caller-side orchestration.
+- [~] **§6 Screen streaming** — behind the `screen-stream` feature:
+  - [x] Protocol codecs: `MinicapStream`/`MinicapHeader`, `Minitouch`/`MinitouchBanner`.
+  - [x] minicap launch + lifecycle: `MinicapOptions`, `ADBServerDevice::start_minicap`,
+        `MinicapSession` (background launch, socket connect-retry, kill on stop/drop).
+  - [ ] minitouch launch helper (the protocol codec is done; launching it is a follow-up).
+  - [ ] ABI→binary asset resolution and rotation-driven minicap restart.
 
 Protocol/parsing logic across all sections is covered by device-free unit tests; the live
 wire round-trips (forward port, list output, `open_local`, minicap/minitouch sockets) still
