@@ -4,7 +4,7 @@ use crate::{
 };
 
 impl ADBEmulatorDevice {
-    /// Send a SMS to this emulator with given content with given phone number
+    /// Rotate this emulator's screen orientation.
     pub fn rotate(&mut self) -> Result<()> {
         let _ = self.connect()?.send_command(&ADBEmulatorCommand::Rotate)?;
         Ok(())

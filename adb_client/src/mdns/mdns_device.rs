@@ -21,7 +21,7 @@ pub struct MDNSDevice {
 }
 
 impl MDNSDevice {
-    /// Return all adresses linked to this device
+    /// Return all addresses linked to this device
     #[must_use]
     pub fn addresses(&self) -> HashSet<IpAddr> {
         self.addresses.clone()
