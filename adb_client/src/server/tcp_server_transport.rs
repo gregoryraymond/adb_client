@@ -80,6 +80,19 @@ impl TCPServerTransport {
             )))
     }
 
+    /// Take ownership of the underlying connection, leaving the transport disconnected.
+    ///
+    /// Used to hand a raw stream (e.g. an opened local service) to the caller without the
+    /// transport later shutting it down on reconnect.
+    pub(crate) fn take_connection(&mut self) -> Result<TcpStream> {
+        self.tcp_stream
+            .take()
+            .ok_or(RustADBError::IOError(Error::new(
+                ErrorKind::NotConnected,
+                "not connected",
+            )))
+    }
+
     /// Gets the body length from hexadecimal value
     pub(crate) fn get_hex_body_length(&self) -> Result<u32> {
         let length_buffer = self.read_body_length()?;
