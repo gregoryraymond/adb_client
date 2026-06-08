@@ -20,6 +20,23 @@ earlier primitives and is by far the most involved.
 - [~] In progress
 - [x] Done
 
+## Status
+
+Implemented as a stack of chained PRs (each builds on the previous):
+
+- [x] **§1 Device properties** — `get_properties`, `get_property`, `device_properties`, `display_info`
+- [x] **§2 Input injection** — `input_keyevent`/`input_text`/`input_tap`/`input_swipe` + `KeyCode`
+- [x] **§3 Screen capture** — `screencap`
+- [x] **§4 Port forwarding** — `forward_tcp`, `list_forward`, `list_reverse`, `ForwardRule`
+- [x] **§5 Generic local socket** — `open_local`
+- [~] **§6 Screen streaming** — minicap/minitouch protocol codecs done (`MinicapStream`,
+      `Minitouch`, banner parsers), behind the `screen-stream` feature. Binary provisioning
+      (6a) and process lifecycle/reconnect (6d) remain as caller-side orchestration.
+
+Protocol/parsing logic across all sections is covered by device-free unit tests; the live
+wire round-trips (forward port, list output, `open_local`, minicap/minitouch sockets) still
+need verification against a real device.
+
 ## Baseline — already available
 
 These are already implemented and need no further work for STF:

@@ -30,6 +30,11 @@ mod utils;
 #[cfg_attr(docsrs, doc(cfg(feature = "mdns")))]
 pub mod mdns;
 
+/// Screen streaming (minicap) and remote input (minitouch) protocol codecs
+#[cfg(feature = "screen-stream")]
+#[cfg_attr(docsrs, doc(cfg(feature = "screen-stream")))]
+pub mod stream;
+
 pub use adb_device_ext::ADBDeviceExt;
 use adb_transport::ADBTransport;
 pub use error::{Result, RustADBError};

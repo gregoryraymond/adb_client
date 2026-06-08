@@ -22,6 +22,7 @@ default = ["framebuffer"]
 mdns = ["dep:mdns-sd"]
 usb = ["dep:rusb"]
 framebuffer = ["dep:image"]
+screen-stream = []
 
 [dependencies]
 base64 = { version = "0.22.1" }
