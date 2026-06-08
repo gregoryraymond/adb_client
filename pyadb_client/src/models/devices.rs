@@ -1,4 +1,4 @@
-use adb_client::DeviceShort;
+use adb_client::server::DeviceShort;
 use pyo3::{pyclass, pymethods};
 use pyo3_stub_gen_derive::{gen_stub_pyclass, gen_stub_pymethods};
 
@@ -12,12 +12,14 @@ pub struct PyDeviceShort(DeviceShort);
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyDeviceShort {
+    #[must_use]
     #[getter]
     /// Device identifier
     pub fn identifier(&self) -> String {
         self.0.identifier.clone()
     }
 
+    #[must_use]
     #[getter]
     /// Device state
     pub fn state(&self) -> String {

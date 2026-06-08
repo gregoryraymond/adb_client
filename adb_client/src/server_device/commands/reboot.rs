@@ -1,6 +1,7 @@
 use crate::{
-    models::{AdbServerCommand, RebootType},
-    ADBServerDevice, Result,
+    Result,
+    models::{ADBCommand, ADBLocalCommand, RebootType},
+    server_device::ADBServerDevice,
 };
 
 impl ADBServerDevice {
@@ -9,7 +10,10 @@ impl ADBServerDevice {
         self.set_serial_transport()?;
 
         self.transport
-            .proxy_connection(AdbServerCommand::Reboot(reboot_type), false)
+            .proxy_connection(
+                &ADBCommand::Local(ADBLocalCommand::Reboot(reboot_type)),
+                false,
+            )
             .map(|_| ())
     }
 }

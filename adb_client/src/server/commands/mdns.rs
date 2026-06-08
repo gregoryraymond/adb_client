@@ -1,7 +1,9 @@
 use std::io::BufRead;
 
 use crate::{
-    models::AdbServerCommand, server::models::MDNSBackend, ADBServer, MDNSServices, Result,
+    Result,
+    models::{ADBCommand, ADBHostCommand},
+    server::{ADBServer, MDNSServices, models::MDNSBackend},
 };
 
 const OPENSCREEN_MDNS_BACKEND: &str = "ADB_MDNS_OPENSCREEN";
@@ -11,7 +13,7 @@ impl ADBServer {
     pub fn mdns_check(&mut self) -> Result<bool> {
         let response = self
             .connect()?
-            .proxy_connection(AdbServerCommand::MDNSCheck, true)?;
+            .proxy_connection(&ADBCommand::Host(ADBHostCommand::MDNSCheck), true)?;
 
         match String::from_utf8(response) {
             Ok(s) if s.starts_with("mdns daemon version") => Ok(true),
@@ -24,7 +26,7 @@ impl ADBServer {
     pub fn mdns_services(&mut self) -> Result<Vec<MDNSServices>> {
         let services = self
             .connect()?
-            .proxy_connection(AdbServerCommand::MDNSServices, true)?;
+            .proxy_connection(&ADBCommand::Host(ADBHostCommand::MDNSServices), true)?;
 
         let mut vec_services: Vec<MDNSServices> = vec![];
         for service in services.lines() {
@@ -32,7 +34,7 @@ impl ADBServer {
                 Ok(service) => {
                     vec_services.push(MDNSServices::try_from(service.as_bytes())?);
                 }
-                Err(e) => log::error!("{}", e),
+                Err(e) => log::error!("{e}"),
             }
         }
 

@@ -1,35 +1,43 @@
 use std::{fs::File, io::Write};
 
-use adb_client::ADBServerDevice;
-use anyhow::{anyhow, Result};
+use adb_client::server_device::ADBServerDevice;
 
-use crate::models::LocalDeviceCommand;
+use crate::models::{ADBCliResult, ForwardCommand, LocalDeviceCommand, ReverseCommand};
 
 pub fn handle_local_commands(
     mut device: ADBServerDevice,
     local_device_commands: LocalDeviceCommand,
-) -> Result<()> {
+) -> ADBCliResult<()> {
     match local_device_commands {
         LocalDeviceCommand::HostFeatures => {
             let features = device
                 .host_features()?
                 .iter()
-                .map(|v| v.to_string())
+                .map(ToString::to_string)
                 .reduce(|a, b| format!("{a},{b}"))
-                .ok_or(anyhow!("cannot list features"))?;
+                .unwrap_or_default();
             log::info!("Available host features: {features}");
 
             Ok(())
         }
-        LocalDeviceCommand::List { path } => Ok(device.list(path)?),
         LocalDeviceCommand::Logcat { path } => {
             let writer: Box<dyn Write> = if let Some(path) = path {
-                let f = File::create(path)?;
-                Box::new(f)
+                let log_file = File::create(path)?;
+                Box::new(log_file)
             } else {
                 Box::new(std::io::stdout())
             };
             Ok(device.get_logs(writer)?)
         }
+        LocalDeviceCommand::Forward(forward_command) => match forward_command {
+            ForwardCommand::RemoveAll => Ok(device.forward_remove_all()?),
+            ForwardCommand::Remove { local } => Ok(device.forward_remove(local)?),
+            ForwardCommand::Add { local, remote } => Ok(device.forward(local, remote)?),
+        },
+        LocalDeviceCommand::Reverse(reverse_command) => match reverse_command {
+            ReverseCommand::RemoveAll => Ok(device.reverse_remove_all()?),
+            ReverseCommand::Remove { remote } => Ok(device.reverse_remove(remote)?),
+            ReverseCommand::Add { remote, local } => Ok(device.reverse(remote, local)?),
+        },
     }
 }

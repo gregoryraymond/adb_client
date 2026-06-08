@@ -1,7 +1,8 @@
-# adb_cli
+# `adb_cli`
 
 [![MIT licensed](https://img.shields.io/crates/l/adb_cli.svg)](./LICENSE-MIT)
 ![Crates.io Total Downloads](https://img.shields.io/crates/d/adb_cli)
+![MSRV](https://img.shields.io/crates/msrv/adb_cli)
 
 Rust binary providing an improved version of `adb` CLI.
 
@@ -10,7 +11,7 @@ Rust binary providing an improved version of `adb` CLI.
 This crate provides a lightweight binary based on the `adb_client` crate. You can install it by running the following command :
 
 ```shell
-cargo install adb_cli 
+cargo install adb_cli
 ```
 
 Usage is quite simple, and tends to look like `adb`:
@@ -34,6 +35,7 @@ Commands:
   framebuffer    Dump framebuffer of device
   host-features  List available server features
   list           List a directory on device
+  list-packages  List packages installed on device
   logcat         Get logs of device
   help           Print this message or the help of the given subcommand(s)
 

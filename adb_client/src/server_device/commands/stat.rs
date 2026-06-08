@@ -3,14 +3,15 @@ use std::io::{Read, Write};
 use byteorder::{ByteOrder, LittleEndian};
 
 use crate::{
-    models::{AdbServerCommand, AdbStatResponse, SyncCommand},
-    ADBServerDevice, Result, RustADBError,
+    AdbStatResponse, Result, RustADBError,
+    models::{ADBCommand, ADBLocalCommand, SyncCommand},
+    server_device::ADBServerDevice,
 };
 
 impl ADBServerDevice {
-    fn handle_stat_command<S: AsRef<str>>(&mut self, path: S) -> Result<AdbStatResponse> {
+    fn handle_stat_command<S: AsRef<str>>(&self, path: S) -> Result<AdbStatResponse> {
         let mut len_buf = [0_u8; 4];
-        LittleEndian::write_u32(&mut len_buf, path.as_ref().len() as u32);
+        LittleEndian::write_u32(&mut len_buf, u32::try_from(path.as_ref().len())?);
 
         // 4 bytes of command name is already sent by send_sync_request
         self.transport.get_raw_connection()?.write_all(&len_buf)?;
@@ -31,8 +32,7 @@ impl ADBServerDevice {
                 Ok(data.into())
             }
             x => Err(RustADBError::UnknownResponseType(format!(
-                "Unknown response {}",
-                x
+                "Unknown response {x}"
             ))),
         }
     }
@@ -42,10 +42,11 @@ impl ADBServerDevice {
         self.set_serial_transport()?;
 
         // Set device in SYNC mode
-        self.transport.send_adb_request(AdbServerCommand::Sync)?;
+        self.transport
+            .send_adb_request(&ADBCommand::Local(ADBLocalCommand::Sync))?;
 
         // Send a "Stat" command
-        self.transport.send_sync_request(SyncCommand::Stat)?;
+        self.transport.send_sync_request(&SyncCommand::Stat)?;
 
         self.handle_stat_command(path)
     }

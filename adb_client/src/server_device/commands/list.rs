@@ -1,8 +1,9 @@
 use crate::{
-    models::{AdbServerCommand, SyncCommand},
-    ADBServerDevice, Result,
+    Result,
+    models::{ADBCommand, ADBListItem, ADBListItemType, ADBLocalCommand, SyncCommand},
+    server_device::ADBServerDevice,
 };
-use byteorder::{ByteOrder, LittleEndian};
+use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use std::{
     io::{Read, Write},
     str,
@@ -10,23 +11,25 @@ use std::{
 
 impl ADBServerDevice {
     /// Lists files in path on the device.
-    pub fn list<A: AsRef<str>>(&mut self, path: A) -> Result<()> {
+    /// note: path uses internal file paths, so Documents is at /storage/emulated/0/Documents
+    pub fn list<A: AsRef<str>>(&mut self, path: A) -> Result<Vec<ADBListItemType>> {
         self.set_serial_transport()?;
 
         // Set device in SYNC mode
-        self.transport.send_adb_request(AdbServerCommand::Sync)?;
+        self.transport
+            .send_adb_request(&ADBCommand::Local(ADBLocalCommand::Sync))?;
 
         // Send a list command
-        self.transport.send_sync_request(SyncCommand::List)?;
+        self.transport.send_sync_request(&SyncCommand::List)?;
 
         self.handle_list_command(path)
     }
 
-    // This command does not seem to work correctly. The devices I test it on just resturn
-    // 'DONE' directly without listing anything.
-    fn handle_list_command<S: AsRef<str>>(&mut self, path: S) -> Result<()> {
+    fn handle_list_command<A: AsRef<str>>(&self, path: A) -> Result<Vec<ADBListItemType>> {
+        // TODO: use LIS2 to support files over 2.14 GB in size.
+        // SEE: https://github.com/cstyan/adbDocumentation?tab=readme-ov-file#adb-list
         let mut len_buf = [0_u8; 4];
-        LittleEndian::write_u32(&mut len_buf, path.as_ref().len() as u32);
+        LittleEndian::write_u32(&mut len_buf, u32::try_from(path.as_ref().len())?);
 
         // 4 bytes of command name is already sent by send_sync_request
         self.transport.get_raw_connection()?.write_all(&len_buf)?;
@@ -36,6 +39,8 @@ impl ADBServerDevice {
             .get_raw_connection()?
             .write_all(path.as_ref().to_string().as_bytes())?;
 
+        let mut list_items = Vec::new();
+
         // Reads returned status code from ADB server
         let mut response = [0_u8; 4];
         loop {
@@ -44,27 +49,32 @@ impl ADBServerDevice {
                 .read_exact(&mut response)?;
             match str::from_utf8(response.as_ref())? {
                 "DENT" => {
-                    // TODO: Move this to a struct that extract this data, but as the device
-                    // I test this on does not return anything, I can't test it.
-                    let mut file_mod = [0_u8; 4];
-                    let mut file_size = [0_u8; 4];
-                    let mut mod_time = [0_u8; 4];
-                    let mut name_len = [0_u8; 4];
-
                     let mut connection = self.transport.get_raw_connection()?;
-                    connection.read_exact(&mut file_mod)?;
-                    connection.read_exact(&mut file_size)?;
-                    connection.read_exact(&mut mod_time)?;
-                    connection.read_exact(&mut name_len)?;
 
-                    let name_len = LittleEndian::read_u32(&name_len);
+                    let mode = connection.read_u32::<LittleEndian>()?;
+                    let size = connection.read_u32::<LittleEndian>()?;
+                    let time = connection.read_u32::<LittleEndian>()?;
+                    let name_len = connection.read_u32::<LittleEndian>()?;
                     let mut name_buf = vec![0_u8; name_len as usize];
                     connection.read_exact(&mut name_buf)?;
+                    let name = String::from_utf8(name_buf)?;
+
+                    // First 9 bits are the file permissions
+                    let permissions = mode & 0b1_1111_1111;
+
+                    let entry = ADBListItem {
+                        name,
+                        time,
+                        permissions,
+                        size,
+                    };
+
+                    list_items.push(ADBListItemType::from_mode_and_entry(mode, entry));
                 }
                 "DONE" => {
-                    return Ok(());
+                    return Ok(list_items);
                 }
-                x => log::error!("Got an unknown response {}", x),
+                x => log::error!("Got an unknown response {x}"),
             }
         }
     }

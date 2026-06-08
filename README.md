@@ -8,8 +8,11 @@
         <a href="https://crates.io/crates/adb_client">
             <img alt="crates.io" src="https://img.shields.io/crates/v/adb_client.svg"/>
         </a>
+        <a href="https://crates.io/crates/adb_client">
+            <img alt="msrv" src="https://img.shields.io/crates/msrv/adb_client"/>
+        </a>
         <a href="https://github.com/cocool97/adb_client/actions">
-            <img alt="ci status" src="https://github.com/cocool97/adb_client/actions/workflows/rust-build.yml/badge.svg"/>
+            <img alt="ci status" src="https://github.com/cocool97/adb_client/actions/workflows/rust-build-matrix.yml/badge.svg"/>
         </a>
         <a href="https://deps.rs/repo/github/cocool97/adb_client">
             <img alt="dependency status" src="https://deps.rs/repo/github/cocool97/adb_client/status.svg"/>
@@ -38,6 +41,13 @@ Main features of this library:
 Rust library implementing both ADB protocols (server and end-devices) and providing a high-level abstraction over the many supported commands.
 
 Improved documentation available [here](./adb_client/README.md).
+
+## Examples
+
+Some examples showing how to use this library are available in the `examples` directory:
+
+- `examples/mdns`: mDNS device discovery
+- `examples/python_api`: demonstrates the use of Python API
 
 ## adb_cli
 

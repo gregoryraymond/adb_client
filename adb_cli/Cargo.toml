@@ -7,14 +7,18 @@ license.workspace = true
 name = "adb_cli"
 readme = "README.md"
 repository.workspace = true
+rust-version.workspace = true
 version.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
-adb_client = { version = "^2.0.0" }
-anyhow = { version = "1.0.94" }
-clap = { version = "4.5.23", features = ["derive"] }
-env_logger = { version = "0.11.5" }
-log = { version = "0.4.26" }
+adb_client = { version = "^3.2.1", features = ["mdns", "usb"] }
+clap = { version = "4.6.1", features = ["derive"] }
+env_logger = { version = "0.11.10" }
+log = { version = "0.4.30" }
+tabwriter = { version = "1.4.1" }
 
 [target.'cfg(unix)'.dependencies]
 termios = { version = "0.3.3" }

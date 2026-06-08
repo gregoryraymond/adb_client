@@ -4,8 +4,9 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use image::{ImageBuffer, Rgba};
 
 use crate::{
-    models::{AdbServerCommand, FrameBufferInfoV1, FrameBufferInfoV2},
-    ADBServerDevice, Result, RustADBError,
+    Result, RustADBError,
+    models::{ADBCommand, ADBLocalCommand, FrameBufferInfoV1, FrameBufferInfoV2},
+    server_device::ADBServerDevice,
 };
 
 impl ADBServerDevice {
@@ -14,7 +15,7 @@ impl ADBServerDevice {
         self.set_serial_transport()?;
 
         self.transport
-            .send_adb_request(AdbServerCommand::FrameBuffer)?;
+            .send_adb_request(&ADBCommand::Local(ADBLocalCommand::FrameBuffer))?;
 
         let version = self
             .transport

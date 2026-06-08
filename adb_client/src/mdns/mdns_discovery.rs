@@ -1,7 +1,7 @@
 use mdns_sd::{ServiceDaemon, ServiceEvent};
 use std::{sync::mpsc::Sender, thread::JoinHandle};
 
-use crate::{MDNSDevice, Result, RustADBError};
+use crate::{Result, RustADBError, mdns::MDNSDevice};
 
 const ADB_SERVICE_NAME: &str = "_adb-tls-connect._tcp.local.";
 
@@ -23,29 +23,25 @@ impl std::fmt::Debug for MDNSDiscoveryService {
 impl MDNSDiscoveryService {
     /// Instantiate a new discovery service to find devices over mdns
     pub fn new() -> Result<Self> {
-        Ok(MDNSDiscoveryService {
+        Ok(Self {
             daemon: ServiceDaemon::new()?,
             thread_handle: None,
         })
     }
 
-    /// Start discovery by spawning a new thread responsible of getting events.
+    /// Start discovery by spawning a new background thread responsible of getting events.
     pub fn start(&mut self, sender: Sender<MDNSDevice>) -> Result<()> {
         let receiver = self.daemon.browse(ADB_SERVICE_NAME)?;
 
-        let handle: JoinHandle<Result<()>> = std::thread::spawn(move || loop {
-            while let Ok(event) = receiver.recv() {
-                match event {
-                    ServiceEvent::SearchStarted(_)
-                    | ServiceEvent::ServiceRemoved(_, _)
-                    | ServiceEvent::ServiceFound(_, _)
-                    | ServiceEvent::SearchStopped(_) => {
-                        // Ignoring these events. We are only interesting in found devices
-                        continue;
-                    }
-                    ServiceEvent::ServiceResolved(service_info) => {
-                        if let Err(e) = sender.send(MDNSDevice::from(service_info)) {
-                            return Err(e.into());
+        let handle: JoinHandle<Result<()>> = std::thread::spawn(move || {
+            loop {
+                while let Ok(event) = receiver.recv() {
+                    if let ServiceEvent::ServiceResolved(service_info) = event {
+                        match MDNSDevice::try_from(service_info) {
+                            Ok(device) => {
+                                sender.send(device).map_err(|_| RustADBError::SendError)?;
+                            }
+                            Err(e) => log::error!("got error with device: {e}"),
                         }
                     }
                 }

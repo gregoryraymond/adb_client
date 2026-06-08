@@ -1,8 +1,8 @@
 use std::net::SocketAddrV4;
 
-use adb_client::ADBServer;
+use adb_client::{server::ADBServer, server_device::ADBServerDevice};
 use anyhow::Result;
-use pyo3::{pyclass, pymethods, PyResult};
+use pyo3::{PyResult, pyclass, pymethods};
 use pyo3_stub_gen_derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use crate::{PyADBServerDevice, PyDeviceShort};
@@ -16,15 +16,20 @@ pub struct PyADBServer(ADBServer);
 #[pymethods]
 impl PyADBServer {
     #[new]
-    /// Instantiate a new PyADBServer instance
-    pub fn new(address: String) -> PyResult<Self> {
+    /// Instantiate a new `PyADBServer` instance
+    pub fn new(address: &str) -> PyResult<Self> {
         let address = address.parse::<SocketAddrV4>()?;
         Ok(ADBServer::new(address).into())
     }
 
     /// List available devices
     pub fn devices(&mut self) -> Result<Vec<PyDeviceShort>> {
-        Ok(self.0.devices()?.into_iter().map(|v| v.into()).collect())
+        Ok(self
+            .0
+            .devices()?
+            .into_iter()
+            .map(std::convert::Into::into)
+            .collect())
     }
 
     /// Get a device, assuming that only one is currently connected
@@ -33,8 +38,21 @@ impl PyADBServer {
     }
 
     /// Get a device by its name, as shown in `.devices()` output
-    pub fn get_device_by_name(&mut self, name: String) -> Result<PyADBServerDevice> {
-        Ok(self.0.get_device_by_name(&name)?.into())
+    pub fn get_device_by_name(&mut self, name: &str) -> Result<PyADBServerDevice> {
+        Ok(self.0.get_device_by_name(name)?.into())
+    }
+
+    /// Connect device over tcp with address and port
+    pub fn connect_device(&mut self, address: String) -> Result<PyADBServerDevice> {
+        let socket_address = address.parse::<SocketAddrV4>()?;
+        self.0.connect_device(socket_address)?;
+        Ok(ADBServerDevice::new(address, self.0.socket_addr()).into())
+    }
+
+    /// Disconnect device over tcp with address and port
+    pub fn disconnect_device(&mut self, address: &str) -> Result<()> {
+        let socket_address = address.parse::<SocketAddrV4>()?;
+        Ok(self.0.disconnect_device(socket_address)?)
     }
 }
 

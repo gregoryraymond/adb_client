@@ -9,6 +9,10 @@ name = "pyadb_client"
 readme = "README.md"
 repository.workspace = true
 version.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -19,12 +23,8 @@ doc = false
 name = "stub_gen"
 
 [dependencies]
-adb_client = { path = "../adb_client" }
-anyhow = { version = "1.0.95" }
-pyo3 = { version = "0.23.4", features = [
-    "abi3-py37",
-    "anyhow",
-    "extension-module",
-] }
-pyo3-stub-gen = "0.7.0"
-pyo3-stub-gen-derive = "0.7.0"
+adb_client = { path = "../adb_client", features = ["usb"] }
+anyhow = { version = "1.0.102" }
+pyo3 = { version = "0.28.3", features = ["abi3-py310", "anyhow"] }
+pyo3-stub-gen = { version = "0.22.3" }
+pyo3-stub-gen-derive = { version = "0.22.3" }

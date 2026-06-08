@@ -5,7 +5,7 @@ use clap::Parser;
 
 use super::DeviceCommands;
 
-fn parse_hex_id(id: &str) -> Result<u16, ParseIntError> {
+const fn parse_hex_id(id: &str) -> Result<u16, ParseIntError> {
     u16::from_str_radix(id, 16)
 }
 
@@ -20,6 +20,9 @@ pub struct UsbCommand {
     /// Path to a custom private key to use for authentication
     #[clap(short = 'k', long = "private-key")]
     pub path_to_private_key: Option<PathBuf>,
+    /// List all connected Android devices
+    #[clap(short = 'l', long = "list")]
+    pub list_devices: bool,
     #[clap(subcommand)]
-    pub commands: DeviceCommands,
+    pub commands: Option<DeviceCommands>,
 }

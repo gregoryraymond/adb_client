@@ -1,8 +1,8 @@
-use adb_client::ADBEmulatorDevice;
+use adb_client::emulator::ADBEmulatorDevice;
 
-use crate::models::{EmuCommand, EmulatorCommand};
+use crate::models::{ADBCliResult, EmuCommand, EmulatorCommand};
 
-pub fn handle_emulator_commands(emulator_command: EmulatorCommand) -> anyhow::Result<()> {
+pub fn handle_emulator_commands(emulator_command: EmulatorCommand) -> ADBCliResult<()> {
     let mut emulator = ADBEmulatorDevice::new(emulator_command.serial, None)?;
 
     match emulator_command.command {
@@ -14,6 +14,20 @@ pub fn handle_emulator_commands(emulator_command: EmulatorCommand) -> anyhow::Re
             log::info!("SMS sent to {phone_number}");
         }
         EmuCommand::Rotate => emulator.rotate()?,
+        EmuCommand::AvdDiscoveryPath => {
+            let path = emulator.avd_discovery_path()?;
+            log::info!("AVD discovery path: {}", path.display());
+            println!("{}", path.display());
+        }
+        EmuCommand::AvdGrpcPort => {
+            let port = emulator.avd_grpc_port()?;
+            log::info!("gRPC port: {port}");
+            println!("{port}");
+        }
+        EmuCommand::Raw { command } => {
+            let response = emulator.send_raw_command(&command)?;
+            println!("{response}");
+        }
     }
 
     Ok(())

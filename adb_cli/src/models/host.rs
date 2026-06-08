@@ -1,12 +1,12 @@
-use std::net::SocketAddrV4;
+use std::{net::SocketAddrV4, str::FromStr};
 
-use adb_client::{RustADBError, WaitForDeviceTransport};
+use adb_client::{RustADBError, server::WaitForDeviceTransport};
 use clap::Parser;
 
 fn parse_wait_for_device_device_transport(
     value: &str,
 ) -> Result<WaitForDeviceTransport, RustADBError> {
-    WaitForDeviceTransport::try_from(value)
+    WaitForDeviceTransport::from_str(value)
 }
 
 #[derive(Parser, Debug)]

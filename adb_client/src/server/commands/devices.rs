@@ -1,8 +1,11 @@
 use std::io::Read;
 
 use crate::{
-    models::AdbServerCommand, ADBEmulatorDevice, ADBServer, ADBServerDevice, DeviceLong,
-    DeviceShort, Result, RustADBError,
+    Result, RustADBError,
+    emulator::ADBEmulatorDevice,
+    models::{ADBCommand, ADBHostCommand},
+    server::{ADBServer, DeviceLong, DeviceShort},
+    server_device::ADBServerDevice,
 };
 
 impl ADBServer {
@@ -10,7 +13,7 @@ impl ADBServer {
     pub fn devices(&mut self) -> Result<Vec<DeviceShort>> {
         let devices = self
             .connect()?
-            .proxy_connection(AdbServerCommand::Devices, true)?;
+            .proxy_connection(&ADBCommand::Host(ADBHostCommand::Devices), true)?;
 
         let mut vec_devices: Vec<DeviceShort> = vec![];
         for device in devices.split(|x| x.eq(&b'\n')) {
@@ -28,7 +31,7 @@ impl ADBServer {
     pub fn devices_long(&mut self) -> Result<Vec<DeviceLong>> {
         let devices_long = self
             .connect()?
-            .proxy_connection(AdbServerCommand::DevicesLong, true)?;
+            .proxy_connection(&ADBCommand::Host(ADBHostCommand::DevicesLong), true)?;
 
         let mut vec_devices: Vec<DeviceLong> = vec![];
         for device in devices_long.split(|x| x.eq(&b'\n')) {
@@ -36,7 +39,7 @@ impl ADBServer {
                 break;
             }
 
-            vec_devices.push(DeviceLong::try_from(device.to_vec())?);
+            vec_devices.push(DeviceLong::try_from(device)?);
         }
 
         Ok(vec_devices)
@@ -67,26 +70,43 @@ impl ADBServer {
             .devices()?
             .into_iter()
             .filter(|d| d.identifier.as_str() == name)
-            .collect::<Vec<DeviceShort>>()
-            .len();
-        if nb_devices != 1 {
+            .count();
+        if nb_devices == 1 {
+            Ok(ADBServerDevice::new(name.to_string(), self.socket_addr))
+        } else {
             Err(RustADBError::DeviceNotFound(format!(
                 "could not find device {name}"
             )))
-        } else {
-            Ok(ADBServerDevice::new(name.to_string(), self.socket_addr))
         }
     }
 
-    /// Given a DeviceShort from list devices conver this into an ADBServerDevice
-    pub fn get_device_from_device_short(&mut self, device: &DeviceShort) -> Result<ADBServerDevice> {
-        Ok(ADBServerDevice::new(device.identifier.clone(), self.socket_addr))
+    /// Get a device matching the given transport id (as returned by `adb devices -l`).
+    ///
+    /// Transport ids are unique within a running ADB server and disambiguate devices that
+    /// share the same serial number. They are reassigned on device reconnect or server
+    /// restart, so callers should re-query rather than caching the id.
+    pub fn get_device_by_transport_id(&mut self, transport_id: u32) -> Result<ADBServerDevice> {
+        let nb_devices = self
+            .devices_long()?
+            .into_iter()
+            .filter(|d| d.transport_id == transport_id)
+            .count();
+        if nb_devices == 1 {
+            Ok(ADBServerDevice::new_with_transport_id(
+                transport_id,
+                self.socket_addr,
+            ))
+        } else {
+            Err(RustADBError::DeviceNotFound(format!(
+                "could not find device with transport id {transport_id}"
+            )))
+        }
     }
 
     /// Tracks new devices showing up.
     pub fn track_devices(&mut self, callback: impl Fn(DeviceShort) -> Result<()>) -> Result<()> {
         self.connect()?
-            .send_adb_request(AdbServerCommand::TrackDevices)?;
+            .send_adb_request(&ADBCommand::Host(ADBHostCommand::TrackDevices))?;
 
         loop {
             let length = self.get_transport()?.get_hex_body_length()?;

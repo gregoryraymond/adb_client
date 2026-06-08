@@ -1,19 +1,19 @@
 use crate::{
-    constants,
-    models::{AdbServerCommand, SyncCommand},
-    ADBServerDevice, Result,
+    Result,
+    models::{ADBCommand, ADBLocalCommand, SyncCommand},
+    server_device::ADBServerDevice,
 };
 use byteorder::{LittleEndian, ReadBytesExt};
 use std::io::{BufReader, BufWriter, Read, Write};
 
-/// Internal structure wrapping a [std::io::Read] and hiding underlying protocol logic.
+/// Internal structure wrapping a [`std::io::Read`] and hiding underlying protocol logic.
 struct ADBRecvCommandReader<R: Read> {
     inner: R,
     remaining_data_bytes_to_read: usize,
 }
 
 impl<R: Read> ADBRecvCommandReader<R> {
-    pub fn new(inner: R) -> Self {
+    pub const fn new(inner: R) -> Self {
         Self {
             inner,
             remaining_data_bytes_to_read: 0,
@@ -32,7 +32,9 @@ impl<R: Read> Read for ADBRecvCommandReader<R> {
             match &header[..] {
                 b"DATA" => {
                     let length = self.inner.read_u32::<LittleEndian>()? as usize;
-                    let effective_read = self.inner.read(&mut buf[0..length])?;
+                    // ensuring read data is at most the buffer length
+                    let min_data_to_read = std::cmp::min(length, buf.len());
+                    let effective_read = self.inner.read(&mut buf[0..min_data_to_read])?;
                     self.remaining_data_bytes_to_read = length - effective_read;
 
                     Ok(effective_read)
@@ -43,18 +45,14 @@ impl<R: Read> Read for ADBRecvCommandReader<R> {
                     let mut error_msg = vec![0; length];
                     self.inner.read_exact(&mut error_msg)?;
 
-                    Err(std::io::Error::new(
-                        std::io::ErrorKind::Other,
-                        format!(
-                            "ADB request failed: {}",
-                            String::from_utf8_lossy(&error_msg)
-                        ),
-                    ))
+                    Err(std::io::Error::other(format!(
+                        "ADB request failed: {}",
+                        String::from_utf8_lossy(&error_msg)
+                    )))
                 }
-                _ => Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("Unknown response from device {:#?}", header),
-                )),
+                _ => Err(std::io::Error::other(format!(
+                    "Unknown response from device {header:#?}"
+                ))),
             }
         } else {
             // Computing minimum to ensure to stop reading before next header...
@@ -68,37 +66,36 @@ impl<R: Read> Read for ADBRecvCommandReader<R> {
     }
 }
 
+const BUFFER_SIZE: usize = 65535;
+
 impl ADBServerDevice {
     /// Receives path to stream from the device.
     pub fn pull(&mut self, path: &dyn AsRef<str>, stream: &mut dyn Write) -> Result<()> {
         self.set_serial_transport()?;
 
         // Set device in SYNC mode
-        self.transport.send_adb_request(AdbServerCommand::Sync)?;
+        self.transport
+            .send_adb_request(&ADBCommand::Local(ADBLocalCommand::Sync))?;
 
         // Send a recv command
-        self.transport.send_sync_request(SyncCommand::Recv)?;
+        self.transport.send_sync_request(&SyncCommand::Recv)?;
 
         self.handle_recv_command(path, stream)
     }
 
-    fn handle_recv_command<S: AsRef<str>>(
-        &mut self,
-        from: S,
-        output: &mut dyn Write,
-    ) -> Result<()> {
+    fn handle_recv_command<S: AsRef<str>>(&self, from: S, output: &mut dyn Write) -> Result<()> {
         let mut raw_connection = self.transport.get_raw_connection()?;
 
         let from_as_bytes = from.as_ref().as_bytes();
         let mut buffer = Vec::with_capacity(4 + from_as_bytes.len());
-        buffer.extend_from_slice(&(from.as_ref().len() as u32).to_le_bytes());
+        buffer.extend_from_slice(&(u32::try_from(from.as_ref().len())?).to_le_bytes());
         buffer.extend_from_slice(from_as_bytes);
         raw_connection.write_all(&buffer)?;
 
         let reader = ADBRecvCommandReader::new(raw_connection);
         std::io::copy(
-            &mut BufReader::with_capacity(constants::BUFFER_SIZE, reader),
-            &mut BufWriter::with_capacity(constants::BUFFER_SIZE, output),
+            &mut BufReader::with_capacity(BUFFER_SIZE, reader),
+            &mut BufWriter::with_capacity(BUFFER_SIZE, output),
         )?;
 
         // Connection should've been left in SYNC mode by now

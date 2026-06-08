@@ -1,16 +1,19 @@
 use std::fmt::Display;
 
-#[derive(Debug, PartialEq)]
+/// Available host features.
+#[derive(Debug, Eq, PartialEq)]
 pub enum HostFeatures {
+    /// Shell version 2.
     ShellV2,
+    /// Command.
     Cmd,
 }
 
 impl Display for HostFeatures {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            HostFeatures::ShellV2 => write!(f, "ShellV2"),
-            HostFeatures::Cmd => write!(f, "Cmd"),
+            Self::ShellV2 => write!(f, "ShellV2"),
+            Self::Cmd => write!(f, "Cmd"),
         }
     }
 }

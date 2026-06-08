@@ -2,26 +2,39 @@
 #![forbid(unsafe_code)]
 #![forbid(missing_debug_implementations)]
 #![forbid(missing_docs)]
+#![allow(clippy::missing_errors_doc)]
 #![doc = include_str!("../README.md")]
+// Feature `doc_cfg` is currently only available on nightly builds.
+// It is activated when cfg `docsrs` is enabled.
+// Documentation can be build locally using:
+// `RUSTDOCFLAGS="--cfg docsrs" cargo +nightly doc --no-deps --all-features`
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod adb_device_ext;
-mod constants;
-mod device;
-mod emulator_device;
+mod adb_transport;
+/// Emulator-related definitions
+pub mod emulator;
 mod error;
-mod mdns;
+mod message_devices;
 mod models;
-mod server;
-mod server_device;
-mod transports;
+
+/// Server-related definitions
+pub mod server;
+
+/// Device reachable by the server related definitions
+pub mod server_device;
 mod utils;
 
+/// MDNS-related definitions
+#[cfg(feature = "mdns")]
+#[cfg_attr(docsrs, doc(cfg(feature = "mdns")))]
+pub mod mdns;
+
 pub use adb_device_ext::ADBDeviceExt;
-pub use device::{ADBTcpDevice, ADBUSBDevice};
-pub use emulator_device::ADBEmulatorDevice;
+use adb_transport::ADBTransport;
 pub use error::{Result, RustADBError};
-pub use mdns::*;
-pub use models::{AdbStatResponse, RebootType, PackageListType, PackageDetails, UserFilter};
-pub use server::*;
-pub use server_device::ADBServerDevice;
-pub use transports::*;
+pub use message_devices::*;
+pub use models::{
+    ADBListItem, ADBListItemType, ADBStatExtendedResponse, ADBStatMapping, AdbStatResponse,
+    HostFeatures, PackageDetails, PackageListType, RebootType, RemountInfo, UserFilter,
+};
