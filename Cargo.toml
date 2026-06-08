@@ -3,6 +3,7 @@ members = [
     "adb_cli",
     "adb_client",
     "examples/mdns",
+    "examples/remote_control",
     "examples/screen_mirror",
     "pyadb_client",
 ]
