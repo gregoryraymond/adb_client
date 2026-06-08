@@ -36,7 +36,7 @@ pub fn handle_local_commands(
         },
         LocalDeviceCommand::Reverse(reverse_command) => match reverse_command {
             ReverseCommand::RemoveAll => Ok(device.reverse_remove_all()?),
-            ReverseCommand::Remove { local } => Ok(device.reverse_remove(local)?),
+            ReverseCommand::Remove { remote } => Ok(device.reverse_remove(remote)?),
             ReverseCommand::Add { remote, local } => Ok(device.reverse(remote, local)?),
         },
     }

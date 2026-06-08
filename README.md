@@ -42,9 +42,9 @@ Rust library implementing both ADB protocols (server and end-devices) and provid
 
 Improved documentation available [here](./adb_client/README.md).
 
-## examples
+## Examples
 
-Some examples showing of to use this library are available in the `examples` directory:
+Some examples showing how to use this library are available in the `examples` directory:
 
 - `examples/mdns`: mDNS device discovery
 - `examples/python_api`: demonstrates the use of Python API

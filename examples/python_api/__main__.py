@@ -43,7 +43,7 @@ def main():
         assert f.read() == data
         logger.info("pulled data matches")
 
-    uid = int(device.shell_command("id -u"))
+    uid = int(device.shell_command("id -u").strip())
     logger.info(f"uid={uid}")
 
 

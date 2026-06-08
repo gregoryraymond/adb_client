@@ -68,8 +68,7 @@ impl TryFrom<Box<ResolvedService>> for MDNSDevice {
         Ok(Self {
             fullname: value.fullname,
             port: NonZeroU16::new(value.port).ok_or(RustADBError::UnknownDeviceState(format!(
-                "device {} has a non-u16 port: {}",
-                fullname, value.port
+                "device {fullname} advertised an invalid (zero) port"
             )))?,
             addresses: value.addresses.iter().map(ScopedIp::to_ip_addr).collect(),
         })
