@@ -1,15 +1,28 @@
+use std::net::{SocketAddrV4, TcpStream};
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 use crate::{
     ADBDeviceExt, Result, RustADBError,
     server_device::ADBServerDevice,
-    stream::{MinicapOptions, MinicapSession, MinicapStream, build_device, minicap_launch_command},
+    stream::{
+        MinicapOptions, MinicapSession, MinicapStream, Minitouch, MinitouchSession, build_device,
+        minicap_launch_command, minitouch_launch_command, read_minitouch_banner,
+    },
 };
 
-/// Number of times to retry connecting to the minicap socket while it starts up.
-const MINICAP_CONNECT_ATTEMPTS: usize = 50;
+/// Number of times to retry connecting to a streaming socket while the process starts up.
+const CONNECT_ATTEMPTS: usize = 50;
 /// Delay between connection attempts.
-const MINICAP_CONNECT_DELAY: Duration = Duration::from_millis(100);
+const CONNECT_DELAY: Duration = Duration::from_millis(100);
+
+/// A launched device-side process and the stream connected to its socket.
+struct LaunchedProcess {
+    stream: TcpStream,
+    serial: Option<String>,
+    server: SocketAddrV4,
+    launcher: JoinHandle<Result<()>>,
+}
 
 impl ADBServerDevice {
     /// Launch minicap on the device and return a connected [`MinicapSession`] yielding frames.
@@ -26,11 +39,48 @@ impl ADBServerDevice {
         binary_dir: &str,
         options: &MinicapOptions,
     ) -> Result<MinicapSession> {
+        let command = minicap_launch_command(binary_dir, options);
+        let process = self.launch_and_connect(command, "localabstract:minicap")?;
+
+        let stream = MinicapStream::new(process.stream)?;
+        Ok(MinicapSession::new(
+            stream,
+            process.serial,
+            process.server,
+            process.launcher,
+        ))
+    }
+
+    /// Launch minitouch on the device and return a connected [`MinitouchSession`] for injecting
+    /// touch events.
+    ///
+    /// `binary_dir` is the device-side directory holding the `minitouch` executable. The startup
+    /// banner is read and parsed, exposing the coordinate/pressure limits via
+    /// [`MinitouchSession::banner`]. The returned session kills the device-side process when
+    /// stopped or dropped.
+    pub fn start_minitouch(&mut self, binary_dir: &str) -> Result<MinitouchSession> {
+        let command = minitouch_launch_command(binary_dir);
+        let process = self.launch_and_connect(command, "localabstract:minitouch")?;
+
+        let banner = read_minitouch_banner(&process.stream)?;
+        let controller = Minitouch::new(process.stream);
+        Ok(MinitouchSession::new(
+            controller,
+            banner,
+            process.serial,
+            process.server,
+            process.launcher,
+        ))
+    }
+
+    /// Launch `command` on a dedicated background connection, then connect to `service`,
+    /// retrying while the process binds it. Returns the opened stream plus the bits needed to
+    /// later kill the launched process.
+    fn launch_and_connect(&mut self, command: String, service: &str) -> Result<LaunchedProcess> {
         let serial = self.identifier.clone();
         let server = self.transport.get_socketaddr();
-        let command = minicap_launch_command(binary_dir, options);
 
-        // minicap runs until killed, so launch it on its own connection in a background thread.
+        // The binary runs until killed, so launch it on its own connection in a background thread.
         let launch_serial = serial.clone();
         let launcher = std::thread::spawn(move || -> Result<()> {
             let mut device = build_device(launch_serial, server);
@@ -38,17 +88,20 @@ impl ADBServerDevice {
             Ok(())
         });
 
-        // Connect to the abstract socket, retrying until minicap has bound it.
         let mut last_error = None;
-        for _ in 0..MINICAP_CONNECT_ATTEMPTS {
-            match self.open_local("localabstract:minicap") {
+        for _ in 0..CONNECT_ATTEMPTS {
+            match self.open_local(service) {
                 Ok(stream) => {
-                    let stream = MinicapStream::new(stream)?;
-                    return Ok(MinicapSession::new(stream, serial, server, launcher));
+                    return Ok(LaunchedProcess {
+                        stream,
+                        serial,
+                        server,
+                        launcher,
+                    });
                 }
                 Err(error) => {
                     last_error = Some(error);
-                    std::thread::sleep(MINICAP_CONNECT_DELAY);
+                    std::thread::sleep(CONNECT_DELAY);
                 }
             }
         }
@@ -61,7 +114,7 @@ impl ADBServerDevice {
         drop(launcher);
 
         Err(last_error.unwrap_or_else(|| {
-            RustADBError::ADBRequestFailed("minicap socket did not become available".to_string())
+            RustADBError::ADBRequestFailed(format!("{service} socket did not become available"))
         }))
     }
 }

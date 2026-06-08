@@ -33,7 +33,8 @@ Implemented as a stack of chained PRs (each builds on the previous):
   - [x] Protocol codecs: `MinicapStream`/`MinicapHeader`, `Minitouch`/`MinitouchBanner`.
   - [x] minicap launch + lifecycle: `MinicapOptions`, `ADBServerDevice::start_minicap`,
         `MinicapSession` (background launch, socket connect-retry, kill on stop/drop).
-  - [ ] minitouch launch helper (the protocol codec is done; launching it is a follow-up).
+  - [x] minitouch launch + lifecycle: `ADBServerDevice::start_minitouch`, `MinitouchSession`
+        (launch, banner read, controller, kill on stop/drop).
   - [ ] ABI→binary asset resolution and rotation-driven minicap restart.
 
 Protocol/parsing logic across all sections is covered by device-free unit tests; the live

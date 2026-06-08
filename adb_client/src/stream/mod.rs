@@ -19,7 +19,9 @@ mod launcher;
 mod minicap;
 mod minitouch;
 
-pub use launcher::{MinicapOptions, MinicapSession};
-pub(crate) use launcher::{build_device, minicap_launch_command};
+pub use launcher::{MinicapOptions, MinicapSession, MinitouchSession};
+pub(crate) use launcher::{
+    build_device, minicap_launch_command, minitouch_launch_command, read_minitouch_banner,
+};
 pub use minicap::{MinicapHeader, MinicapStream};
 pub use minitouch::{Minitouch, MinitouchBanner};

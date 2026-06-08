@@ -1,8 +1,10 @@
+use std::io::{BufRead, BufReader};
 use std::net::{SocketAddrV4, TcpStream};
 use std::thread::JoinHandle;
 
 use super::{MinicapHeader, MinicapStream};
-use crate::{ADBDeviceExt, Result, server_device::ADBServerDevice};
+use super::{Minitouch, MinitouchBanner};
+use crate::{ADBDeviceExt, Result, RustADBError, server_device::ADBServerDevice};
 
 /// Display projection passed to minicap's `-P` flag: the real (physical) size, the virtual
 /// (output) size frames are scaled to, and the rotation.
@@ -60,25 +62,22 @@ pub(crate) fn minicap_launch_command(binary_dir: &str, options: &MinicapOptions)
     )
 }
 
-/// A running minicap session: a launched minicap process plus the connected frame stream.
-///
-/// Dropping the session makes a best-effort attempt to kill the device-side minicap process;
-/// call [`MinicapSession::stop`] to do so explicitly and surface any error.
-#[derive(Debug)]
-pub struct MinicapSession {
-    stream: MinicapStream<TcpStream>,
-    cleanup: Option<MinicapCleanup>,
+/// Build the shell command launching minitouch from `binary_dir`.
+pub(crate) fn minitouch_launch_command(binary_dir: &str) -> String {
+    format!("{binary_dir}/minitouch")
 }
 
+/// Cleanup handle shared by the streaming sessions: kills a launched device-side process and
+/// joins its launcher thread.
 #[derive(Debug)]
-struct MinicapCleanup {
+struct ProcessCleanup {
     serial: Option<String>,
     server: SocketAddrV4,
     pid: u32,
     launcher: JoinHandle<Result<()>>,
 }
 
-impl MinicapCleanup {
+impl ProcessCleanup {
     fn shutdown(self) -> Result<()> {
         let Self {
             serial,
@@ -99,6 +98,16 @@ impl MinicapCleanup {
     }
 }
 
+/// A running minicap session: a launched minicap process plus the connected frame stream.
+///
+/// Dropping the session makes a best-effort attempt to kill the device-side minicap process;
+/// call [`MinicapSession::stop`] to do so explicitly and surface any error.
+#[derive(Debug)]
+pub struct MinicapSession {
+    stream: MinicapStream<TcpStream>,
+    cleanup: Option<ProcessCleanup>,
+}
+
 impl MinicapSession {
     pub(crate) fn new(
         stream: MinicapStream<TcpStream>,
@@ -109,7 +118,7 @@ impl MinicapSession {
         let pid = stream.header().pid;
         Self {
             stream,
-            cleanup: Some(MinicapCleanup {
+            cleanup: Some(ProcessCleanup {
                 serial,
                 server,
                 pid,
@@ -144,6 +153,86 @@ impl Drop for MinicapSession {
             let _ = cleanup.shutdown();
         }
     }
+}
+
+/// A running minitouch session: a launched minitouch process plus a connected controller.
+///
+/// Dropping the session makes a best-effort attempt to kill the device-side process; call
+/// [`MinitouchSession::stop`] to do so explicitly and surface any error.
+#[derive(Debug)]
+pub struct MinitouchSession {
+    controller: Minitouch<TcpStream>,
+    banner: MinitouchBanner,
+    cleanup: Option<ProcessCleanup>,
+}
+
+impl MinitouchSession {
+    pub(crate) fn new(
+        controller: Minitouch<TcpStream>,
+        banner: MinitouchBanner,
+        serial: Option<String>,
+        server: SocketAddrV4,
+        launcher: JoinHandle<Result<()>>,
+    ) -> Self {
+        Self {
+            controller,
+            banner,
+            cleanup: Some(ProcessCleanup {
+                serial,
+                server,
+                pid: banner.pid,
+                launcher,
+            }),
+        }
+    }
+
+    /// The minitouch banner describing its limits (max contacts / x / y / pressure).
+    #[must_use]
+    pub fn banner(&self) -> &MinitouchBanner {
+        &self.banner
+    }
+
+    /// Mutable access to the controller for sending touch commands.
+    pub fn controller(&mut self) -> &mut Minitouch<TcpStream> {
+        &mut self.controller
+    }
+
+    /// Stop the session: kill the device-side minitouch process and wait for the launcher.
+    pub fn stop(mut self) -> Result<()> {
+        match self.cleanup.take() {
+            Some(cleanup) => cleanup.shutdown(),
+            None => Ok(()),
+        }
+    }
+}
+
+impl Drop for MinitouchSession {
+    fn drop(&mut self) {
+        if let Some(cleanup) = self.cleanup.take() {
+            let _ = cleanup.shutdown();
+        }
+    }
+}
+
+/// Read the minitouch startup banner from `stream`, consuming lines up to and including the
+/// `$ <pid>` line.
+pub(crate) fn read_minitouch_banner(stream: &TcpStream) -> Result<MinitouchBanner> {
+    let mut reader = BufReader::new(stream.try_clone()?);
+    let mut text = String::new();
+    // The banner is three short lines (v / ^ / $); cap the read so a misbehaving binary
+    // cannot make us spin forever.
+    for _ in 0..16 {
+        let mut line = String::new();
+        if reader.read_line(&mut line).map_err(RustADBError::IOError)? == 0 {
+            break;
+        }
+        let is_pid_line = line.starts_with('$');
+        text.push_str(&line);
+        if is_pid_line {
+            break;
+        }
+    }
+    MinitouchBanner::parse(&text)
 }
 
 /// Construct a device for a one-off control command on a fresh connection.
