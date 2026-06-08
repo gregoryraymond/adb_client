@@ -35,6 +35,10 @@ pub enum ForwardCommand {
     Remove { local: String },
     /// Forward a local port to a device port.
     Add { local: String, remote: String },
+    /// Forward a dynamically-allocated local TCP port to a device port, printing the port.
+    Tcp { remote: String },
+    /// List all forward rules.
+    List,
 }
 
 #[derive(Parser, Debug)]
@@ -45,4 +49,6 @@ pub enum ReverseCommand {
     Remove { remote: String },
     /// Reverse a device port to a local port.
     Add { remote: String, local: String },
+    /// List reverse rules for this device.
+    List,
 }

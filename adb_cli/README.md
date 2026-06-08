@@ -36,6 +36,10 @@ Commands:
   host-features  List available server features
   list           List a directory on device
   list-packages  List packages installed on device
+  getprop        Print device properties (getprop)
+  display-info   Print the display geometry
+  input          Inject input events (keyevent/text/tap/swipe)
+  screencap      Capture a screenshot as PNG
   logcat         Get logs of device
   help           Print this message or the help of the given subcommand(s)
 

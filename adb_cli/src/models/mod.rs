@@ -9,7 +9,7 @@ mod tcp;
 mod usb;
 
 pub use adb_cli_error::{ADBCliError, ADBCliResult};
-pub use device::DeviceCommands;
+pub use device::{DeviceCommands, InputCommand};
 pub use emu::{EmuCommand, EmulatorCommand};
 pub use host::{HostCommand, MdnsCommand};
 pub use local::{ForwardCommand, LocalCommand, LocalDeviceCommand, ReverseCommand};
