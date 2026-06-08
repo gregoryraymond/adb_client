@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::path::Path;
 
@@ -7,8 +8,11 @@ use {
     std::io::Cursor,
 };
 
-use crate::models::{ADBListItemType, AdbStatResponse, PackageListType, RemountInfo, UserFilter};
-use crate::{ADBStatExtendedResponse, RebootType, Result};
+use crate::models::{
+    ADBListItemType, AdbStatResponse, DeviceProperties, DisplayInfo, PackageListType, RemountInfo,
+    UserFilter, parse_getprop, parse_wm_density, parse_wm_size,
+};
+use crate::{ADBStatExtendedResponse, RebootType, Result, RustADBError};
 
 /// Trait representing all features available on ADB devices.
 pub trait ADBDeviceExt {
@@ -144,6 +148,44 @@ pub trait ADBDeviceExt {
             .map(|package| package.trim().to_string())
             .filter(|package| !package.is_empty())
             .collect())
+    }
+
+    /// Return all device properties, as reported by `getprop`, as a key/value map.
+    fn get_properties(&mut self) -> Result<HashMap<String, String>> {
+        let mut output = Vec::new();
+        self.shell_command(&"getprop", Some(&mut output), None)?;
+        Ok(parse_getprop(&String::from_utf8(output)?))
+    }
+
+    /// Return the value of a single device property (`getprop <name>`), or `None` if unset.
+    fn get_property(&mut self, name: &str) -> Result<Option<String>> {
+        let mut output = Vec::new();
+        self.shell_command(&format!("getprop {name}"), Some(&mut output), None)?;
+        let value = String::from_utf8(output)?.trim().to_string();
+        Ok((!value.is_empty()).then_some(value))
+    }
+
+    /// Return commonly-used device properties (model, ABI, SDK level, ...) as typed fields.
+    fn device_properties(&mut self) -> Result<DeviceProperties> {
+        Ok(DeviceProperties::from_property_map(&self.get_properties()?))
+    }
+
+    /// Return the physical display geometry, as reported by `wm size` / `wm density`.
+    fn display_info(&mut self) -> Result<DisplayInfo> {
+        let mut size_output = Vec::new();
+        self.shell_command(&"wm size", Some(&mut size_output), None)?;
+        let (width, height) =
+            parse_wm_size(&String::from_utf8(size_output)?).ok_or(RustADBError::ConversionError)?;
+
+        let mut density_output = Vec::new();
+        self.shell_command(&"wm density", Some(&mut density_output), None)?;
+        let density = parse_wm_density(&String::from_utf8(density_output)?);
+
+        Ok(DisplayInfo {
+            width,
+            height,
+            density,
+        })
     }
 
     /// Enable dm-verity on the device
