@@ -158,11 +158,26 @@ pub trait ADBDeviceExt {
     }
 
     /// Return the value of a single device property (`getprop <name>`), or `None` if unset.
+    ///
+    /// `name` must be a valid Android property key (`[A-Za-z0-9._-]`); other characters are
+    /// rejected so the value cannot alter the shell command (e.g. inject a default argument or
+    /// extra tokens). Only the trailing line ending is stripped from the value.
     fn get_property(&mut self, name: &str) -> Result<Option<String>> {
+        if name.is_empty()
+            || !name
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+        {
+            return Err(RustADBError::ADBRequestFailed(format!(
+                "invalid property name: {name:?}"
+            )));
+        }
+
         let mut output = Vec::new();
         self.shell_command(&format!("getprop {name}"), Some(&mut output), None)?;
-        let value = String::from_utf8(output)?.trim().to_string();
-        Ok((!value.is_empty()).then_some(value))
+        let value = String::from_utf8(output)?;
+        let value = value.trim_end_matches(['\r', '\n']);
+        Ok((!value.is_empty()).then(|| value.to_string()))
     }
 
     /// Return commonly-used device properties (model, ABI, SDK level, ...) as typed fields.
