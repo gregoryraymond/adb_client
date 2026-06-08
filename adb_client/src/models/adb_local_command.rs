@@ -12,9 +12,11 @@ pub enum ADBLocalCommand {
     Forward(String, String),
     ForwardRemove(String),
     ForwardRemoveAll,
+    ListForward,
     Reverse(String, String),
     ReverseRemove(String),
     ReverseRemoveAll,
+    ListReverse,
     Reconnect,
     Remount,
     DisableVerity,
@@ -70,11 +72,13 @@ impl Display for ADBLocalCommand {
             }
             Self::ForwardRemove(local) => write!(f, "host:killforward:{local}"),
             Self::ForwardRemoveAll => write!(f, "host:killforward-all"),
+            Self::ListForward => write!(f, "host:list-forward"),
             Self::Reverse(remote, local) => {
                 write!(f, "reverse:forward:{remote};{local}")
             }
             Self::ReverseRemove(remote) => write!(f, "reverse:killforward:{remote}"),
             Self::ReverseRemoveAll => write!(f, "reverse:killforward-all"),
+            Self::ListReverse => write!(f, "reverse:list-forward"),
             Self::Reconnect => write!(f, "reconnect"),
             Self::Remount => write!(f, "remount:"),
             Self::DisableVerity => write!(f, "disable-verity:"),

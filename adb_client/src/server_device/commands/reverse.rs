@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    models::{ADBCommand, ADBLocalCommand},
+    models::{ADBCommand, ADBLocalCommand, ForwardRule, parse_reverse_list},
     server_device::ADBServerDevice,
 };
 
@@ -36,5 +36,16 @@ impl ADBServerDevice {
         self.transport
             .proxy_connection(&ADBCommand::Local(ADBLocalCommand::ReverseRemoveAll), false)
             .map(|_| ())
+    }
+
+    /// List reverse rules for this device (`adb reverse --list`).
+    pub fn list_reverse(&mut self) -> Result<Vec<ForwardRule>> {
+        self.set_serial_transport()?;
+
+        let response = self
+            .transport
+            .proxy_connection(&ADBCommand::Local(ADBLocalCommand::ListReverse), true)?;
+
+        Ok(parse_reverse_list(&String::from_utf8(response)?))
     }
 }
