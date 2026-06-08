@@ -4,7 +4,7 @@ use std::thread::JoinHandle;
 
 use super::{MinicapHeader, MinicapStream};
 use super::{Minitouch, MinitouchBanner};
-use crate::{ADBDeviceExt, Result, RustADBError, server_device::ADBServerDevice};
+use crate::{ADBDeviceExt, DisplayInfo, Result, RustADBError, server_device::ADBServerDevice};
 
 /// Display projection passed to minicap's `-P` flag: the real (physical) size, the virtual
 /// (output) size frames are scaled to, and the rotation.
@@ -33,6 +33,23 @@ impl MinicapOptions {
             virtual_height: height,
             orientation: 0,
         }
+    }
+
+    /// Project at the native resolution with the given rotation (`0..=3`, in 90° steps).
+    #[must_use]
+    pub fn with_orientation(width: u32, height: u32, orientation: u8) -> Self {
+        Self {
+            orientation,
+            ..Self::native(width, height)
+        }
+    }
+
+    /// Build options from a [`DisplayInfo`] (see [`crate::ADBDeviceExt::display_info`]) and a
+    /// rotation. When the display rotates, rebuild with the new `orientation` and restart the
+    /// session (see the module docs).
+    #[must_use]
+    pub fn from_display_info(display: &DisplayInfo, orientation: u8) -> Self {
+        Self::with_orientation(display.width, display.height, orientation)
     }
 
     /// The `-P` projection argument: `<rw>x<rh>@<vw>x<vh>/<rotation>`.
@@ -66,6 +83,34 @@ pub(crate) fn minicap_launch_command(binary_dir: &str, options: &MinicapOptions)
 pub(crate) fn minitouch_launch_command(binary_dir: &str) -> String {
     // Single-quote the caller-supplied path (see `minicap_launch_command`).
     format!("'{binary_dir}/minitouch'")
+}
+
+/// Relative paths to the minicap assets to push to the device, within a
+/// [`minicap-prebuilt`](https://github.com/DeviceFarmer/minicap-prebuilt) checkout.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MinicapAssets {
+    /// Path to the `minicap` executable (`minicap-nopie` on SDK < 16).
+    pub binary: String,
+    /// Path to the matching `minicap.so` for the device's SDK level.
+    pub library: String,
+}
+
+impl MinicapAssets {
+    /// Resolve the asset paths for a device ABI (e.g. `arm64-v8a`) and SDK level, following the
+    /// `minicap-prebuilt` directory layout. PIE support was added in SDK 16, so older devices
+    /// use the `minicap-nopie` build.
+    #[must_use]
+    pub fn resolve(abi: &str, sdk_level: u32) -> Self {
+        let binary_name = if sdk_level >= 16 {
+            "minicap"
+        } else {
+            "minicap-nopie"
+        };
+        Self {
+            binary: format!("prebuilt/{abi}/bin/{binary_name}"),
+            library: format!("prebuilt/{abi}/lib/android-{sdk_level}/minicap.so"),
+        }
+    }
 }
 
 /// Cleanup handle shared by the streaming sessions: kills a launched device-side process and
@@ -287,5 +332,42 @@ mod tests {
             command,
             "LD_LIBRARY_PATH='/data/local/tmp' '/data/local/tmp/minicap' -P 1080x2340@1080x2340/0"
         );
+    }
+
+    #[test]
+    fn options_with_orientation() {
+        assert_eq!(
+            MinicapOptions::with_orientation(1080, 2340, 1).projection(),
+            "1080x2340@1080x2340/1"
+        );
+    }
+
+    #[test]
+    fn options_from_display_info() {
+        let display = DisplayInfo {
+            width: 720,
+            height: 1280,
+            density: Some(320),
+        };
+        let options = MinicapOptions::from_display_info(&display, 3);
+        assert_eq!(options.real_width, 720);
+        assert_eq!(options.real_height, 1280);
+        assert_eq!(options.orientation, 3);
+    }
+
+    #[test]
+    fn resolves_assets() {
+        let assets = MinicapAssets::resolve("arm64-v8a", 34);
+        assert_eq!(assets.binary, "prebuilt/arm64-v8a/bin/minicap");
+        assert_eq!(
+            assets.library,
+            "prebuilt/arm64-v8a/lib/android-34/minicap.so"
+        );
+    }
+
+    #[test]
+    fn resolves_nopie_for_old_sdk() {
+        let assets = MinicapAssets::resolve("armeabi-v7a", 15);
+        assert_eq!(assets.binary, "prebuilt/armeabi-v7a/bin/minicap-nopie");
     }
 }
