@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
-use clap::Parser;
+use adb_client::{PackageDetails, PackageListType, UserFilter};
+use clap::{Parser, ValueEnum};
 
 use super::RebootTypeCommand;
 
@@ -59,6 +60,81 @@ pub enum DeviceCommands {
         /// Path to list files from
         path: String,
     },
+    /// List packages installed on device
+    ListPackages {
+        /// Which set of packages to list
+        #[clap(long = "filter", value_enum, default_value_t = PackageFilter::All)]
+        filter: PackageFilter,
+        /// Additional detail to display for each package
+        #[clap(long = "detail", value_enum, default_value_t = PackageDetail::Normal)]
+        detail: PackageDetail,
+        /// Restrict listing to the given user id
+        #[clap(short = 'u', long = "user")]
+        user: Option<u32>,
+        /// Restrict listing to the device's current user (resolved on device)
+        #[clap(long = "current-user", conflicts_with = "user")]
+        current_user: bool,
+    },
     /// Restart adb daemon with root permissions
     Root,
+}
+
+/// Which set of packages [`DeviceCommands::ListPackages`] should return.
+#[derive(ValueEnum, Clone, Debug)]
+pub enum PackageFilter {
+    /// All packages, excluding APEX containers
+    All,
+    /// Only APEX packages
+    Apex,
+    /// Only disabled packages
+    Disabled,
+    /// Only enabled packages
+    Enabled,
+    /// Only system packages
+    System,
+    /// Only uninstalled packages whose data is kept
+    Uninstalled,
+}
+
+/// Additional detail displayed for each listed package.
+#[derive(ValueEnum, Clone, Debug)]
+pub enum PackageDetail {
+    /// Just the package identifier
+    Normal,
+    /// Also include the version code
+    VersionCode,
+    /// Also include the installer
+    Installer,
+    /// Also include the associated APK path
+    Apks,
+}
+
+impl From<PackageDetail> for PackageDetails {
+    fn from(value: PackageDetail) -> Self {
+        match value {
+            PackageDetail::Normal => PackageDetails::Normal,
+            PackageDetail::VersionCode => PackageDetails::ShowVersionCode,
+            PackageDetail::Installer => PackageDetails::ShowInstaller,
+            PackageDetail::Apks => PackageDetails::ShowAssociatedApks,
+        }
+    }
+}
+
+impl PackageFilter {
+    /// Build the [`PackageListType`] requested on the command line.
+    pub fn into_package_list_type(
+        self,
+        detail: PackageDetail,
+        user: UserFilter,
+    ) -> PackageListType {
+        let detail = detail.into();
+        match self {
+            PackageFilter::All => PackageListType::AllNonApex(detail, user),
+            PackageFilter::Apex => PackageListType::Apex(detail, user),
+            PackageFilter::Disabled => PackageListType::Disabled(detail, user),
+            PackageFilter::Enabled => PackageListType::Enabled(detail, user),
+            PackageFilter::System => PackageListType::System(detail, user),
+            PackageFilter::Uninstalled => PackageListType::Uninstalled(detail, user),
+        }
+    }
 }

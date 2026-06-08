@@ -7,7 +7,7 @@ use {
     std::io::Cursor,
 };
 
-use crate::models::{ADBListItemType, AdbStatResponse, RemountInfo};
+use crate::models::{ADBListItemType, AdbStatResponse, PackageListType, RemountInfo, UserFilter};
 use crate::{ADBStatExtendedResponse, RebootType, Result};
 
 /// Trait representing all features available on ADB devices.
@@ -98,6 +98,53 @@ pub trait ADBDeviceExt {
 
     /// Uninstall the package `package` from device.
     fn uninstall(&mut self, package: &dyn AsRef<str>, user: Option<&str>) -> Result<()>;
+
+    /// List packages installed on the device, returning their identifiers.
+    ///
+    /// This wraps the device's `pm list packages` command. `package_filter` selects which
+    /// set of packages to return, how much detail to include for each entry, and which user
+    /// to query. Each returned [`String`] is the matching `pm` output line with the leading
+    /// `package:` marker stripped, so depending on the requested [`crate::PackageDetails`] it
+    /// may also carry the APK path, version code or installer.
+    fn list_packages(&mut self, package_filter: &PackageListType) -> Result<Vec<String>> {
+        let (filter_flag, details, user_filter) = package_filter.components();
+
+        let mut command = format!("pm list packages {filter_flag}");
+
+        if let Some(detail_flag) = details.flag() {
+            command.push(' ');
+            command.push_str(detail_flag);
+        }
+
+        let user_id = match user_filter {
+            UserFilter::NoUserSpecified => None,
+            UserFilter::SpecificUser(user_id) => Some(*user_id),
+            UserFilter::CurrentUser => {
+                let mut current_user = Vec::new();
+                self.shell_command(
+                    &"cmd activity get-current-user",
+                    Some(&mut current_user),
+                    None,
+                )?;
+                Some(String::from_utf8(current_user)?.trim().parse::<u32>()?)
+            }
+        };
+
+        if let Some(user_id) = user_id {
+            command.push_str(" --user ");
+            command.push_str(&user_id.to_string());
+        }
+
+        let mut output = Vec::new();
+        self.shell_command(&command, Some(&mut output), None)?;
+
+        Ok(String::from_utf8(output)?
+            .lines()
+            .filter_map(|line| line.strip_prefix("package:"))
+            .map(|package| package.trim().to_string())
+            .filter(|package| !package.is_empty())
+            .collect())
+    }
 
     /// Enable dm-verity on the device
     fn enable_verity(&mut self) -> Result<()>;

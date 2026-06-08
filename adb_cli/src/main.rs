@@ -106,6 +106,24 @@ fn run_command(mut device: Box<dyn ADBDeviceExt>, command: DeviceCommands) -> AD
                 log::info!("{dir}");
             }
         }
+        DeviceCommands::ListPackages {
+            filter,
+            detail,
+            user,
+            current_user,
+        } => {
+            let user_filter = if current_user {
+                adb_client::UserFilter::CurrentUser
+            } else if let Some(user_id) = user {
+                adb_client::UserFilter::SpecificUser(user_id)
+            } else {
+                adb_client::UserFilter::NoUserSpecified
+            };
+            let package_filter = filter.into_package_list_type(detail, user_filter);
+            for package in device.list_packages(&package_filter)? {
+                println!("{package}");
+            }
+        }
     }
 
     Ok(())

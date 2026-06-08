@@ -35,6 +35,7 @@ Commands:
   framebuffer    Dump framebuffer of device
   host-features  List available server features
   list           List a directory on device
+  list-packages  List packages installed on device
   logcat         Get logs of device
   help           Print this message or the help of the given subcommand(s)
 
