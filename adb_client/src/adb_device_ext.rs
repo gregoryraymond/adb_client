@@ -246,7 +246,8 @@ pub trait ADBDeviceExt {
     /// binary-clean on shell v2 (Android 7+); on very old shell-v1-only devices a PTY may
     /// translate newlines and corrupt the PNG.
     fn screencap(&mut self) -> Result<Vec<u8>> {
-        let mut output = Vec::new();
+        // Pre-size for a typical screenshot to avoid repeated reallocations of multi-MB output.
+        let mut output = Vec::with_capacity(512 * 1024);
         self.shell_command(&"screencap -p", Some(&mut output), None)?;
         Ok(output)
     }
