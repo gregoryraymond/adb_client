@@ -19,7 +19,7 @@ use adb_termios::ADBTermios;
 
 use clap::Parser;
 use handlers::{handle_emulator_commands, handle_host_commands, handle_local_commands};
-use models::{DeviceCommands, LocalCommand, MainCommand, Opts};
+use models::{DeviceCommands, InputCommand, LocalCommand, MainCommand, Opts};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Write, stdout};
@@ -124,8 +124,64 @@ fn run_command(mut device: Box<dyn ADBDeviceExt>, command: DeviceCommands) -> AD
                 println!("{package}");
             }
         }
+        DeviceCommands::Getprop { name } => run_getprop(&mut *device, name)?,
+        DeviceCommands::DisplayInfo => run_display_info(&mut *device)?,
+        DeviceCommands::Input(input) => run_input(&mut *device, input)?,
+        DeviceCommands::Screencap { path } => run_screencap(&mut *device, &path)?,
     }
 
+    Ok(())
+}
+
+fn run_display_info(device: &mut dyn ADBDeviceExt) -> ADBCliResult<()> {
+    let info = device.display_info()?;
+    let density = info
+        .density
+        .map_or_else(|| "unknown".to_string(), |d| d.to_string());
+    println!("{}x{} density={density}", info.width, info.height);
+    Ok(())
+}
+
+fn run_screencap(device: &mut dyn ADBDeviceExt, path: &str) -> ADBCliResult<()> {
+    let png = device.screencap()?;
+    if path == "-" {
+        std::io::stdout().write_all(&png)?;
+    } else {
+        File::create(Path::new(path))?.write_all(&png)?;
+    }
+    log::info!("Captured {} bytes", png.len());
+    Ok(())
+}
+
+fn run_getprop(device: &mut dyn ADBDeviceExt, name: Option<String>) -> ADBCliResult<()> {
+    if let Some(name) = name {
+        if let Some(value) = device.get_property(&name)? {
+            println!("{value}");
+        }
+    } else {
+        let properties = device.get_properties()?;
+        let mut keys: Vec<&String> = properties.keys().collect();
+        keys.sort();
+        for key in keys {
+            println!("[{key}]: [{}]", properties[key]);
+        }
+    }
+    Ok(())
+}
+
+fn run_input(device: &mut dyn ADBDeviceExt, input: InputCommand) -> ADBCliResult<()> {
+    match input {
+        InputCommand::Keyevent { keycode } => device.input_keyevent(keycode)?,
+        InputCommand::Text { text } => device.input_text(&text)?,
+        InputCommand::Tap { x, y } => device.input_tap(x, y)?,
+        InputCommand::Swipe {
+            x1,
+            y1,
+            x2,
+            y2,
+            duration_ms,
+        } => device.input_swipe(x1, y1, x2, y2, duration_ms)?,
+    }
     Ok(())
 }
 

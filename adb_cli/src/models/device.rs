@@ -77,6 +77,42 @@ pub enum DeviceCommands {
     },
     /// Restart adb daemon with root permissions
     Root,
+    /// Print device properties (`getprop`)
+    Getprop {
+        /// Specific property to read; omit to print all properties
+        name: Option<String>,
+    },
+    /// Print the display geometry (`wm size` / `wm density`)
+    DisplayInfo,
+    /// Inject input events
+    #[clap(subcommand)]
+    Input(InputCommand),
+    /// Capture a screenshot as PNG
+    Screencap {
+        /// Output path, or `-` for stdout
+        path: String,
+    },
+}
+
+/// Input events injected via the device `input` tool.
+#[derive(Parser, Debug)]
+pub enum InputCommand {
+    /// Send a key event by Android key code
+    Keyevent { keycode: i32 },
+    /// Type text
+    Text { text: String },
+    /// Tap at coordinates
+    Tap { x: u32, y: u32 },
+    /// Swipe between coordinates over a duration
+    Swipe {
+        x1: u32,
+        y1: u32,
+        x2: u32,
+        y2: u32,
+        /// Swipe duration in milliseconds
+        #[clap(default_value_t = 300)]
+        duration_ms: u32,
+    },
 }
 
 /// Which set of packages [`DeviceCommands::ListPackages`] should return.

@@ -33,11 +33,30 @@ pub fn handle_local_commands(
             ForwardCommand::RemoveAll => Ok(device.forward_remove_all()?),
             ForwardCommand::Remove { local } => Ok(device.forward_remove(local)?),
             ForwardCommand::Add { local, remote } => Ok(device.forward(local, remote)?),
+            ForwardCommand::Tcp { remote } => {
+                let port = device.forward_tcp(remote)?;
+                println!("{port}");
+                Ok(())
+            }
+            ForwardCommand::List => {
+                for rule in device.list_forward()? {
+                    let serial = rule.serial.unwrap_or_default();
+                    println!("{serial} {} {}", rule.local, rule.remote);
+                }
+                Ok(())
+            }
         },
         LocalDeviceCommand::Reverse(reverse_command) => match reverse_command {
             ReverseCommand::RemoveAll => Ok(device.reverse_remove_all()?),
             ReverseCommand::Remove { remote } => Ok(device.reverse_remove(remote)?),
             ReverseCommand::Add { remote, local } => Ok(device.reverse(remote, local)?),
+            ReverseCommand::List => {
+                for rule in device.list_reverse()? {
+                    let serial = rule.serial.unwrap_or_default();
+                    println!("{serial} {} {}", rule.remote, rule.local);
+                }
+                Ok(())
+            }
         },
     }
 }
