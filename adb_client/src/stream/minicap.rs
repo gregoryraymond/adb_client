@@ -1,8 +1,12 @@
-use std::io::Read;
+use std::io::{ErrorKind, Read};
 
 use byteorder::{LittleEndian, ReadBytesExt};
 
 use crate::{Result, RustADBError};
+
+/// Upper bound on a single minicap frame, guarding against a corrupt or hostile length prefix
+/// (which would otherwise drive a multi-GiB allocation). Comfortably above any real frame.
+const MAX_FRAME_LEN: usize = 64 * 1024 * 1024;
 
 /// The global header (banner) sent once at the start of a `minicap` stream.
 ///
@@ -103,11 +107,26 @@ impl<R: Read> MinicapStream<R> {
     }
 
     /// Read the next JPEG frame (blocking). Each frame is a complete JPEG image.
-    pub fn next_frame(&mut self) -> Result<Vec<u8>> {
-        let length = self.reader.read_u32::<LittleEndian>()? as usize;
+    ///
+    /// Returns `Ok(None)` when the stream ends cleanly (the device-side minicap closed the
+    /// socket between frames), so callers can distinguish a graceful end from an I/O error.
+    pub fn next_frame(&mut self) -> Result<Option<Vec<u8>>> {
+        let length = match self.reader.read_u32::<LittleEndian>() {
+            Ok(length) => length as usize,
+            // No more frames: minicap closed the socket at a frame boundary.
+            Err(e) if e.kind() == ErrorKind::UnexpectedEof => return Ok(None),
+            Err(e) => return Err(RustADBError::IOError(e)),
+        };
+
+        if length > MAX_FRAME_LEN {
+            return Err(RustADBError::ADBRequestFailed(format!(
+                "minicap frame length {length} exceeds maximum {MAX_FRAME_LEN}"
+            )));
+        }
+
         let mut frame = vec![0u8; length];
         self.reader.read_exact(&mut frame)?;
-        Ok(frame)
+        Ok(Some(frame))
     }
 
     /// Consume the stream and return the inner reader.
@@ -159,8 +178,18 @@ mod tests {
 
         let mut stream = MinicapStream::new(Cursor::new(data)).unwrap();
         assert_eq!(stream.header().real_width, 1080);
-        assert_eq!(stream.next_frame().unwrap(), vec![0xFF, 0xD8, 0xFF]);
-        assert_eq!(stream.next_frame().unwrap(), vec![0xAA, 0xBB]);
+        assert_eq!(stream.next_frame().unwrap(), Some(vec![0xFF, 0xD8, 0xFF]));
+        assert_eq!(stream.next_frame().unwrap(), Some(vec![0xAA, 0xBB]));
+        // Clean end of stream after the last frame.
+        assert_eq!(stream.next_frame().unwrap(), None);
+    }
+
+    #[test]
+    fn rejects_oversized_frame_length() {
+        let mut data = sample_banner();
+        data.extend_from_slice(&u32::MAX.to_le_bytes()); // absurd frame length
+        let mut stream = MinicapStream::new(Cursor::new(data)).unwrap();
+        assert!(stream.next_frame().is_err());
     }
 
     #[test]
