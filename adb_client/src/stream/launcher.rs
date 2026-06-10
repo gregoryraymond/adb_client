@@ -1,4 +1,4 @@
-use std::io::{BufRead, BufReader};
+use std::io::Read;
 use std::net::{SocketAddrV4, TcpStream};
 use std::thread::JoinHandle;
 
@@ -64,11 +64,12 @@ pub(crate) fn minicap_launch_command(binary_dir: &str, options: &MinicapOptions)
 
 /// Build the shell command launching minitouch from `binary_dir`.
 pub(crate) fn minitouch_launch_command(binary_dir: &str) -> String {
-    format!("{binary_dir}/minitouch")
+    // Single-quote the caller-supplied path (see `minicap_launch_command`).
+    format!("'{binary_dir}/minitouch'")
 }
 
 /// Cleanup handle shared by the streaming sessions: kills a launched device-side process and
-/// joins its launcher thread.
+/// detaches its launcher thread.
 #[derive(Debug)]
 struct ProcessCleanup {
     serial: Option<String>,
@@ -78,6 +79,12 @@ struct ProcessCleanup {
 }
 
 impl ProcessCleanup {
+    /// Shut down the cleanup handle held in `slot` (if any). Shared by both sessions' `stop`
+    /// and `Drop`.
+    fn take_and_shutdown(slot: &mut Option<Self>) -> Result<()> {
+        slot.take().map_or(Ok(()), Self::shutdown)
+    }
+
     fn shutdown(self) -> Result<()> {
         let Self {
             serial,
@@ -140,18 +147,13 @@ impl MinicapSession {
 
     /// Stop the session: kill the device-side minicap process.
     pub fn stop(mut self) -> Result<()> {
-        match self.cleanup.take() {
-            Some(cleanup) => cleanup.shutdown(),
-            None => Ok(()),
-        }
+        ProcessCleanup::take_and_shutdown(&mut self.cleanup)
     }
 }
 
 impl Drop for MinicapSession {
     fn drop(&mut self) {
-        if let Some(cleanup) = self.cleanup.take() {
-            let _ = cleanup.shutdown();
-        }
+        let _ = ProcessCleanup::take_and_shutdown(&mut self.cleanup);
     }
 }
 
@@ -197,39 +199,49 @@ impl MinitouchSession {
         &mut self.controller
     }
 
-    /// Stop the session: kill the device-side minitouch process and wait for the launcher.
+    /// Stop the session: kill the device-side minitouch process.
     pub fn stop(mut self) -> Result<()> {
-        match self.cleanup.take() {
-            Some(cleanup) => cleanup.shutdown(),
-            None => Ok(()),
-        }
+        ProcessCleanup::take_and_shutdown(&mut self.cleanup)
     }
 }
 
 impl Drop for MinitouchSession {
     fn drop(&mut self) {
-        if let Some(cleanup) = self.cleanup.take() {
-            let _ = cleanup.shutdown();
-        }
+        let _ = ProcessCleanup::take_and_shutdown(&mut self.cleanup);
     }
 }
 
-/// Read the minitouch startup banner from `stream`, consuming lines up to and including the
+/// Read the minitouch startup banner from `stream`, consuming bytes up to and including the
 /// `$ <pid>` line.
+///
+/// Reads one byte at a time rather than via a `BufReader`, so it does not consume past the
+/// banner into the shared socket buffer (which the controller half then writes to).
 pub(crate) fn read_minitouch_banner(stream: &TcpStream) -> Result<MinitouchBanner> {
-    let mut reader = BufReader::new(stream.try_clone()?);
+    let mut reader = stream.try_clone()?;
     let mut text = String::new();
-    // The banner is three short lines (v / ^ / $); cap the read so a misbehaving binary
-    // cannot make us spin forever.
-    for _ in 0..16 {
-        let mut line = String::new();
-        if reader.read_line(&mut line).map_err(RustADBError::IOError)? == 0 {
+    let mut byte = [0u8; 1];
+    // The banner is three lines (v / ^ / $); stop after the `$` line, and cap the total read so
+    // a misbehaving binary cannot make us spin forever.
+    let mut at_line_start = true;
+    let mut done = false;
+    while !done && text.len() < 1024 {
+        if reader.read(&mut byte).map_err(RustADBError::IOError)? == 0 {
             break;
         }
-        let is_pid_line = line.starts_with('$');
-        text.push_str(&line);
-        if is_pid_line {
-            break;
+        let c = byte[0];
+        // The `$ <pid>` line is the last one; stop once we've consumed its trailing newline.
+        let pid_line = at_line_start && c == b'$';
+        at_line_start = c == b'\n';
+        text.push(c as char);
+        if pid_line {
+            // Consume the rest of this line up to and including the newline.
+            while reader.read(&mut byte).map_err(RustADBError::IOError)? != 0 {
+                text.push(byte[0] as char);
+                if byte[0] == b'\n' {
+                    break;
+                }
+            }
+            done = true;
         }
     }
     MinitouchBanner::parse(&text)

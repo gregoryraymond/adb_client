@@ -106,11 +106,13 @@ impl ADBServerDevice {
             }
         }
 
-        // The socket never came up. Best-effort kill the process we launched (scoped to this
-        // binary path) so the background thread — blocked in its shell_command — can wind down
-        // instead of leaking its connection, then detach it and surface the error.
+        // The socket never came up. Best-effort kill the process we launched so the background
+        // thread — blocked in its shell_command — can wind down instead of leaking its
+        // connection, then detach it and surface the error. The binary name is the service's
+        // suffix (e.g. `localabstract:minicap` -> `minicap`).
+        let binary = service.rsplit(':').next().unwrap_or(service);
         let mut cleanup = build_device(serial, server);
-        let _ = cleanup.shell_command(&format!("pkill -f '{binary_dir}/minicap'"), None, None);
+        let _ = cleanup.shell_command(&format!("pkill -f {binary}"), None, None);
         drop(launcher);
 
         Err(last_error.unwrap_or_else(|| {
