@@ -7,6 +7,9 @@ pub enum ADBLocalCommand {
     ShellCommand(String, Vec<String>),
     Shell,
     Exec(String),
+    /// Open an arbitrary device-side local service (e.g. `localabstract:minicap`, `tcp:5555`,
+    /// `jdwp:1234`). The contained string is the service name, sent verbatim.
+    Open(String),
     Sync,
     Reboot(RebootType),
     Forward(String, String),
@@ -50,6 +53,7 @@ impl Display for ADBLocalCommand {
                 Err(_) => write!(f, "shell,raw:"),
             },
             Self::Exec(command) => write!(f, "exec:{command}"),
+            Self::Open(service) => write!(f, "{service}"),
             Self::Reboot(reboot_type) => {
                 write!(f, "reboot:{reboot_type}")
             }
@@ -107,4 +111,11 @@ fn test_reverse_remove_command() {
     let command = ADBLocalCommand::ReverseRemove("tcp:7100".to_string());
 
     assert_eq!(command.to_string(), "reverse:killforward:tcp:7100");
+}
+
+#[test]
+fn test_open_command_is_verbatim() {
+    let command = ADBLocalCommand::Open("localabstract:minicap".to_string());
+
+    assert_eq!(command.to_string(), "localabstract:minicap");
 }

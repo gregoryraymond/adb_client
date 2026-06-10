@@ -3,6 +3,7 @@ mod host_features;
 mod install;
 mod list;
 mod logcat;
+mod open_local;
 mod reboot;
 mod reconnect;
 mod recv;
