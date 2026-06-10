@@ -36,6 +36,6 @@ pub use error::{Result, RustADBError};
 pub use message_devices::*;
 pub use models::{
     ADBListItem, ADBListItemType, ADBStatExtendedResponse, ADBStatMapping, AdbStatResponse,
-    DeviceProperties, DisplayInfo, HostFeatures, KeyCode, PackageDetails, PackageListType,
-    RebootType, RemountInfo, UserFilter,
+    DeviceProperties, DisplayInfo, ForwardRule, HostFeatures, KeyCode, PackageDetails,
+    PackageListType, RebootType, RemountInfo, UserFilter,
 };
