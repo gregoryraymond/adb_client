@@ -238,6 +238,20 @@ pub trait ADBDeviceExt {
         Ok(())
     }
 
+    /// Capture a screenshot of the device and return it as PNG bytes (`screencap -p`).
+    ///
+    /// This complements [`Self::framebuffer`]: `screencap` returns a compressed PNG straight
+    /// from the device (smaller, ready to save), whereas the framebuffer service returns raw
+    /// pixels that must be encoded. The image travels over the shell stdout channel, which is
+    /// binary-clean on shell v2 (Android 7+); on very old shell-v1-only devices a PTY may
+    /// translate newlines and corrupt the PNG.
+    fn screencap(&mut self) -> Result<Vec<u8>> {
+        // Pre-size for a typical screenshot to avoid repeated reallocations of multi-MB output.
+        let mut output = Vec::with_capacity(512 * 1024);
+        self.shell_command(&"screencap -p", Some(&mut output), None)?;
+        Ok(output)
+    }
+
     /// Enable dm-verity on the device
     fn enable_verity(&mut self) -> Result<()>;
 
