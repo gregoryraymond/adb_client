@@ -23,43 +23,28 @@ pub(crate) fn parse_reverse_list(output: &str) -> Vec<ForwardRule> {
 }
 
 fn parse_rule_list(output: &str, reverse: bool) -> Vec<ForwardRule> {
-    let mut rules = Vec::new();
-    for line in output.lines() {
-        let tokens: Vec<&str> = line.split_whitespace().collect();
-        let rule = match tokens.as_slice() {
-            // `<serial> <a> <b>`
-            [serial, a, b] => {
-                let (local, remote) = endpoints(a, b, reverse);
-                ForwardRule {
-                    serial: Some((*serial).to_string()),
-                    local,
-                    remote,
-                }
-            }
-            // `<a> <b>` (no serial reported)
-            [a, b] => {
-                let (local, remote) = endpoints(a, b, reverse);
-                ForwardRule {
-                    serial: None,
-                    local,
-                    remote,
-                }
-            }
-            _ => continue,
-        };
-        rules.push(rule);
-    }
-    rules
-}
-
-/// Order the two endpoint columns into `(local, remote)`. Forward lists are `local remote`;
-/// reverse lists are `remote local`.
-fn endpoints(first: &str, second: &str, reverse: bool) -> (String, String) {
-    if reverse {
-        (second.to_string(), first.to_string())
-    } else {
-        (first.to_string(), second.to_string())
-    }
+    output
+        .lines()
+        .filter_map(|line| {
+            // Lines are `<serial> <a> <b>`, or `<a> <b>` when no serial is reported.
+            let (serial, first, second) = match line.split_whitespace().collect::<Vec<_>>()[..] {
+                [serial, a, b] => (Some(serial.to_string()), a, b),
+                [a, b] => (None, a, b),
+                _ => return None,
+            };
+            // Forward lists order the columns `local remote`; reverse lists `remote local`.
+            let (local, remote) = if reverse {
+                (second, first)
+            } else {
+                (first, second)
+            };
+            Some(ForwardRule {
+                serial,
+                local: local.to_string(),
+                remote: remote.to_string(),
+            })
+        })
+        .collect()
 }
 
 #[cfg(test)]

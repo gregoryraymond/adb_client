@@ -1,5 +1,5 @@
 use crate::{
-    Result, RustADBError,
+    Result,
     models::{ADBCommand, ADBLocalCommand, ForwardRule, parse_forward_list},
     server_device::ADBServerDevice,
 };
@@ -31,13 +31,13 @@ impl ADBServerDevice {
             true,
         )?;
 
-        std::str::from_utf8(&response)?
-            .trim()
-            .parse::<u16>()
-            .map_err(RustADBError::from)
+        Ok(std::str::from_utf8(&response)?.trim().parse::<u16>()?)
     }
 
     /// List all forward rules known to the ADB server (`adb forward --list`).
+    ///
+    /// Note: this is a host-global query — it returns rules for *every* connected device, each
+    /// tagged with its serial in [`ForwardRule::serial`], not just this device.
     pub fn list_forward(&mut self) -> Result<Vec<ForwardRule>> {
         let response = self
             .connect()?
