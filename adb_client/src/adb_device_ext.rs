@@ -10,7 +10,7 @@ use {
 
 use crate::models::{
     ADBListItemType, AdbStatResponse, DeviceProperties, DisplayInfo, PackageListType, RemountInfo,
-    UserFilter, parse_getprop, parse_wm_density, parse_wm_size,
+    UserFilter, escape_input_text, parse_getprop, parse_wm_density, parse_wm_size,
 };
 use crate::{ADBStatExtendedResponse, RebootType, Result, RustADBError};
 
@@ -201,6 +201,41 @@ pub trait ADBDeviceExt {
             height,
             density,
         })
+    }
+
+    /// Inject a key event (`input keyevent <keycode>`).
+    ///
+    /// Accepts a raw Android key code; [`crate::KeyCode`] provides constants for common keys,
+    /// e.g. `device.input_keyevent(KeyCode::Home.into())`.
+    fn input_keyevent(&mut self, keycode: i32) -> Result<()> {
+        self.shell_command(&format!("input keyevent {keycode}"), None, None)?;
+        Ok(())
+    }
+
+    /// Type text on the device (`input text`). Spaces and shell-special characters are escaped.
+    fn input_text(&mut self, text: &str) -> Result<()> {
+        self.shell_command(
+            &format!("input text {}", escape_input_text(text)),
+            None,
+            None,
+        )?;
+        Ok(())
+    }
+
+    /// Tap the screen at `(x, y)` (`input tap`).
+    fn input_tap(&mut self, x: u32, y: u32) -> Result<()> {
+        self.shell_command(&format!("input tap {x} {y}"), None, None)?;
+        Ok(())
+    }
+
+    /// Swipe from `(x1, y1)` to `(x2, y2)` over `duration_ms` milliseconds (`input swipe`).
+    fn input_swipe(&mut self, x1: u32, y1: u32, x2: u32, y2: u32, duration_ms: u32) -> Result<()> {
+        self.shell_command(
+            &format!("input swipe {x1} {y1} {x2} {y2} {duration_ms}"),
+            None,
+            None,
+        )?;
+        Ok(())
     }
 
     /// Enable dm-verity on the device
