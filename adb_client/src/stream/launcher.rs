@@ -50,8 +50,11 @@ impl MinicapOptions {
 /// Build the shell command launching minicap from `binary_dir` (which must contain both the
 /// `minicap` executable and the matching `minicap.so`).
 pub(crate) fn minicap_launch_command(binary_dir: &str, options: &MinicapOptions) -> String {
+    // Single-quote the (caller-supplied) directory so spaces or shell metacharacters in the
+    // path cannot break or inject into the device-side shell command. The projection is
+    // digits/`x@/` only and needs no quoting.
     format!(
-        "LD_LIBRARY_PATH={dir} {dir}/minicap -P {projection}",
+        "LD_LIBRARY_PATH='{dir}' '{dir}/minicap' -P {projection}",
         dir = binary_dir,
         projection = options.projection()
     )
@@ -77,12 +80,21 @@ struct MinicapCleanup {
 
 impl MinicapCleanup {
     fn shutdown(self) -> Result<()> {
-        // Kill the device-side process; the launcher's blocking shell_command then returns.
-        let mut device = build_device(self.serial, self.server);
+        let Self {
+            serial,
+            server,
+            pid,
+            launcher,
+        } = self;
+        // Kill the device-side process; the launcher's blocking shell_command then returns as
+        // it observes the exit.
+        let mut device = build_device(serial, server);
         let result = device
-            .shell_command(&format!("kill {}", self.pid), None, None)
+            .shell_command(&format!("kill {pid}"), None, None)
             .map(|_| ());
-        let _ = self.launcher.join();
+        // Detach the launcher rather than join()-ing it: the thread winds down on its own once
+        // the kill lands, and a missed kill must never hang the caller (or block Drop forever).
+        drop(launcher);
         result
     }
 }
@@ -112,12 +124,12 @@ impl MinicapSession {
         self.stream.header()
     }
 
-    /// Read the next JPEG frame (blocking).
-    pub fn next_frame(&mut self) -> Result<Vec<u8>> {
+    /// Read the next JPEG frame (blocking). `Ok(None)` signals a clean end of stream.
+    pub fn next_frame(&mut self) -> Result<Option<Vec<u8>>> {
         self.stream.next_frame()
     }
 
-    /// Stop the session: kill the device-side minicap process and wait for the launcher.
+    /// Stop the session: kill the device-side minicap process.
     pub fn stop(mut self) -> Result<()> {
         match self.cleanup.take() {
             Some(cleanup) => cleanup.shutdown(),
@@ -172,7 +184,7 @@ mod tests {
             minicap_launch_command("/data/local/tmp", &MinicapOptions::native(1080, 2340));
         assert_eq!(
             command,
-            "LD_LIBRARY_PATH=/data/local/tmp /data/local/tmp/minicap -P 1080x2340@1080x2340/0"
+            "LD_LIBRARY_PATH='/data/local/tmp' '/data/local/tmp/minicap' -P 1080x2340@1080x2340/0"
         );
     }
 }
