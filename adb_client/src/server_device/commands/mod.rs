@@ -1,6 +1,7 @@
 mod forward;
 mod host_features;
 mod install;
+mod jdwp;
 mod list;
 mod logcat;
 mod open_local;
