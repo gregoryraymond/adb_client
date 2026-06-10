@@ -99,17 +99,31 @@ impl MinicapAssets {
     /// Resolve the asset paths for a device ABI (e.g. `arm64-v8a`) and SDK level, following the
     /// `minicap-prebuilt` directory layout. PIE support was added in SDK 16, so older devices
     /// use the `minicap-nopie` build.
-    #[must_use]
-    pub fn resolve(abi: &str, sdk_level: u32) -> Self {
+    ///
+    /// The ABI is validated against `[A-Za-z0-9._-]` and rejected otherwise: it typically comes
+    /// from a device-reported property (`ro.product.cpu.abi`), so an unvalidated value (e.g.
+    /// containing `/` or `..`) could traverse outside the prebuilt directory when the caller
+    /// joins these relative paths onto a base.
+    pub fn resolve(abi: &str, sdk_level: u32) -> Result<Self> {
+        if abi.is_empty()
+            || !abi
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
+        {
+            return Err(RustADBError::ADBRequestFailed(format!(
+                "invalid device ABI: {abi:?}"
+            )));
+        }
+
         let binary_name = if sdk_level >= 16 {
             "minicap"
         } else {
             "minicap-nopie"
         };
-        Self {
+        Ok(Self {
             binary: format!("prebuilt/{abi}/bin/{binary_name}"),
             library: format!("prebuilt/{abi}/lib/android-{sdk_level}/minicap.so"),
-        }
+        })
     }
 }
 
@@ -357,7 +371,7 @@ mod tests {
 
     #[test]
     fn resolves_assets() {
-        let assets = MinicapAssets::resolve("arm64-v8a", 34);
+        let assets = MinicapAssets::resolve("arm64-v8a", 34).unwrap();
         assert_eq!(assets.binary, "prebuilt/arm64-v8a/bin/minicap");
         assert_eq!(
             assets.library,
@@ -367,7 +381,14 @@ mod tests {
 
     #[test]
     fn resolves_nopie_for_old_sdk() {
-        let assets = MinicapAssets::resolve("armeabi-v7a", 15);
+        let assets = MinicapAssets::resolve("armeabi-v7a", 15).unwrap();
         assert_eq!(assets.binary, "prebuilt/armeabi-v7a/bin/minicap-nopie");
+    }
+
+    #[test]
+    fn rejects_abi_with_path_traversal() {
+        assert!(MinicapAssets::resolve("../../etc", 34).is_err());
+        assert!(MinicapAssets::resolve("a/b", 34).is_err());
+        assert!(MinicapAssets::resolve("", 34).is_err());
     }
 }
