@@ -35,7 +35,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let sdk_level = properties
         .sdk_level
         .ok_or("device did not report an SDK level")?;
-    let assets = MinicapAssets::resolve(&abi, sdk_level);
+    let assets = MinicapAssets::resolve(&abi, sdk_level)?;
     println!("device abi={abi} sdk={sdk_level}");
 
     // 2. Push the executable and its shared library to the device.
@@ -56,9 +56,12 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut session = device.start_minicap(REMOTE_DIR, &options)?;
     println!("minicap started: {:?}", session.header());
 
-    // 4. Save the first frames as JPEGs.
+    // 4. Save the first frames as JPEGs (stop early if the stream ends).
     for index in 0..frame_count {
-        let frame = session.next_frame()?;
+        let Some(frame) = session.next_frame()? else {
+            println!("minicap stream ended");
+            break;
+        };
         let path = format!("frame_{index:04}.jpg");
         File::create(&path)?.write_all(&frame)?;
         println!("wrote {path} ({} bytes)", frame.len());
