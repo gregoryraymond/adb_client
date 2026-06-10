@@ -15,8 +15,11 @@
 //! [minicap]: https://github.com/DeviceFarmer/minicap
 //! [minitouch]: https://github.com/DeviceFarmer/minitouch
 
+mod launcher;
 mod minicap;
 mod minitouch;
 
+pub use launcher::{MinicapOptions, MinicapSession};
+pub(crate) use launcher::{build_device, minicap_launch_command};
 pub use minicap::{MinicapHeader, MinicapStream};
 pub use minitouch::{Minitouch, MinitouchBanner};

@@ -10,6 +10,8 @@ mod recv;
 mod remount;
 mod reverse;
 mod root;
+#[cfg(feature = "screen-stream")]
+mod screen_stream;
 mod send;
 mod stat;
 mod tcpip;
