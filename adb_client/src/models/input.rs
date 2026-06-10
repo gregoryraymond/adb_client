@@ -50,25 +50,26 @@ impl From<KeyCode> for i32 {
     }
 }
 
-/// Escape a string so it can be passed as the single argument to `input text`.
+/// Quote `text` so it is passed verbatim as the single argument to `input text`.
 ///
-/// `input text` uses `%s` for spaces, and the text travels through a device-side shell,
-/// so shell-special characters are backslash-escaped. A literal `%` cannot be represented
-/// (it collides with the `%s` space convention) and is dropped by the device.
+/// The text travels through a device-side shell, so it is wrapped in single quotes — which
+/// make every byte literal (spaces, newlines, shell metacharacters) — with any embedded
+/// single quote escaped as `'\''`. This neutralizes command-splitting / injection that a
+/// metacharacter denylist would miss (most importantly a newline, which would otherwise act
+/// as a command separator).
 pub(crate) fn escape_input_text(text: &str) -> String {
-    let mut escaped = String::with_capacity(text.len());
+    let mut quoted = String::with_capacity(text.len() + 2);
+    quoted.push('\'');
     for c in text.chars() {
-        match c {
-            ' ' => escaped.push_str("%s"),
-            '(' | ')' | '<' | '>' | '|' | ';' | '&' | '*' | '\\' | '~' | '"' | '\'' | '`' | '$'
-            | '#' | '!' | '?' | '{' | '}' | '[' | ']' => {
-                escaped.push('\\');
-                escaped.push(c);
-            }
-            _ => escaped.push(c),
+        if c == '\'' {
+            // Close the quote, emit an escaped quote, reopen the quote.
+            quoted.push_str("'\\''");
+        } else {
+            quoted.push(c);
         }
     }
-    escaped
+    quoted.push('\'');
+    quoted
 }
 
 #[cfg(test)]
@@ -82,14 +83,21 @@ mod tests {
     }
 
     #[test]
-    fn escapes_spaces_as_percent_s() {
-        assert_eq!(escape_input_text("hello world"), "hello%sworld");
+    fn quotes_plain_text_and_spaces() {
+        assert_eq!(escape_input_text("hello world"), "'hello world'");
+        assert_eq!(escape_input_text("plain123"), "'plain123'");
     }
 
     #[test]
-    fn escapes_shell_specials() {
-        assert_eq!(escape_input_text("a&b"), "a\\&b");
-        assert_eq!(escape_input_text("$(x)"), "\\$\\(x\\)");
-        assert_eq!(escape_input_text("plain123"), "plain123");
+    fn neutralizes_metacharacters_and_newlines() {
+        // Metacharacters and newlines stay inside the quotes — no shell token escapes.
+        assert_eq!(escape_input_text("a&b;c|d"), "'a&b;c|d'");
+        assert_eq!(escape_input_text("a\nrm -rf /"), "'a\nrm -rf /'");
+        assert_eq!(escape_input_text("$(whoami)"), "'$(whoami)'");
+    }
+
+    #[test]
+    fn escapes_embedded_single_quote() {
+        assert_eq!(escape_input_text("it's"), "'it'\\''s'");
     }
 }
