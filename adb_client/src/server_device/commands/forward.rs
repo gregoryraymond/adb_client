@@ -1,3 +1,5 @@
+use std::io::Read;
+
 use crate::{
     Result,
     models::{ADBCommand, ADBLocalCommand, ForwardRule, parse_forward_list},
@@ -26,12 +28,23 @@ impl ADBServerDevice {
     pub fn forward_tcp(&mut self, remote: String) -> Result<u16> {
         self.set_serial_transport()?;
 
-        let response = self.transport.proxy_connection(
-            &ADBCommand::Local(ADBLocalCommand::Forward(remote, "tcp:0".to_string())),
-            true,
-        )?;
+        // `host:forward` replies with *two* OKAYs (the smart-socket accept, then "forward
+        // established"); for a `tcp:0` local spec the server then sends the allocated port as a
+        // 4-hex-length-prefixed string. This matches AOSP adb's client, which does
+        // adb_connect (OKAY) + adb_status (OKAY) + ReadProtocolString (the port).
+        self.transport
+            .send_adb_request(&ADBCommand::Local(ADBLocalCommand::Forward(
+                remote,
+                "tcp:0".to_string(),
+            )))?; // first OKAY
+        self.transport.read_adb_response()?; // second OKAY
 
-        Ok(std::str::from_utf8(&response)?.trim().parse::<u16>()?)
+        let length = self.transport.get_hex_body_length()? as usize;
+        let mut port = vec![0u8; length];
+        let mut connection = self.transport.get_raw_connection()?;
+        connection.read_exact(&mut port)?;
+
+        Ok(std::str::from_utf8(&port)?.trim().parse::<u16>()?)
     }
 
     /// List all forward rules known to the ADB server (`adb forward --list`).
